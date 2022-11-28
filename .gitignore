@@ -1,0 +1,8 @@
+build/**
+/sfml*
+openal32.dll
+/SFML*
+External/**
+.vscode/**
+*.o
+*.exe

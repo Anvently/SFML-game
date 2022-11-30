@@ -3,6 +3,7 @@ build/**
 openal32.dll
 /SFML*
 External/**
+html/**
 .vscode/**
 *.o
 *.exe

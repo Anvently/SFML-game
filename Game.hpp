@@ -51,6 +51,9 @@ class Game {
         void movePlatform(int x);
         void moveBall();
         void tick();
+        
+        //Utility class
+        sf::Vector2i findGridCoord(sf::Vector2f coords);
 }; 
 
 #endif

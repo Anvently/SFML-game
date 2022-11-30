@@ -2,11 +2,14 @@
 #include <iostream>
 #include <ctime>
 #include <random>
+#include <math.h>
+#include <vector>
+#include <algorithm>
 
 //CONSTRUCTOR METHODS
 
 Game::Game() {
-    m_settings={800,600,80,20,1500,40,30,sf::Vector2f(200.f,200.f),1000};
+    m_settings={800,600,80,20,1500,40,30,sf::Vector2f(100.f,100.f),500};
     initVariables();
     initWindow();
 
@@ -90,8 +93,40 @@ void Game::moveBall() {
     );
     sf::Vector2f newPosition(m_ball.getPosition().x + distance.x,m_ball.getPosition().y + distance.y);
     
-    //Check collision on walls
+    /*
+        Check collision on bricks
+        1 : Find every brick overlaying ball position
+        2 : Destroy bricks
+        3 : Take one brick and change direction from which border was hitted first
+    */
+    
+    // 1 : Find every brick overlaying ball position
+    sf::Vector2f corners[4];
+    std::vector<sf::Vector2i> bricksHit;
+    corners[0] = sf::Vector2f(newPosition.x,newPosition.y);
+    corners[1] = sf::Vector2f(newPosition.x+m_settings.ball_size.x,newPosition.y);
+    corners[2] = sf::Vector2f(newPosition.x,newPosition.y+m_settings.ball_size.y);
+    corners[3] = sf::Vector2f(newPosition.x+m_settings.ball_size.x,newPosition.y+m_settings.ball_size.y);
+    sf::Vector2i coord;
+    for (int i = 0; i < 4; i++) {
+        coord = findGridCoord(corners[i]);
+        //Check if corner inside grid, if brick exist and if brick isn't already included 
+        if (coord.x >= 0 && coord.y >= 0 && m_grid[coord.y][coord.x] && std::find(bricksHit.begin(),bricksHit.end(),coord) == bricksHit.end()) bricksHit.push_back(coord); 
+    }
 
+    // 2 : Destroy every brick overlaying the ball
+    for (sf::Vector2i brick : bricksHit) {
+        m_grid[brick.y][brick.x] = 0;
+    }
+
+
+    /*
+        Check collision on walls
+        1: Start with side wall 
+        2: Check upper wall
+    */
+
+    //1 : Check side wall collision
     if (newPosition.x < 0) { //If going through left wall
         newPosition.x = -distance.x - m_ball.getPosition().x; 
         m_ball.m_direction.x=-m_ball.m_direction.x;
@@ -101,13 +136,51 @@ void Game::moveBall() {
         m_ball.m_direction.x=-m_ball.m_direction.x;
     }
 
+    //2 : Check upper wall collision
     if (newPosition.y < 0) { //If going through upper wall
         newPosition.y = -distance.y - m_ball.getPosition().y; 
         m_ball.m_direction.y=-m_ball.m_direction.y;
-    } else if ((newPosition.y + m_settings.ball_size.y)>m_platform.getPosition().y) { //If hit the platform
-        float distanceToPlatform = m_platform.getPosition().y-(m_ball.getPosition().y+m_settings.ball_size.y);
-        newPosition.y += -distance.y + distanceToPlatform;
-        m_ball.m_direction.y=-m_ball.m_direction.y;
+
+    /* 
+        Check platform collision 
+        1 : Check if the ball hit the platform on its trajectory
+        2 : Move the ball to the collision coordinate with old direction
+        3 : Calculate new direction and move the ball with the remaining distance 
+    */
+
+    } else if ((newPosition.y + m_settings.ball_size.y)>m_platform.getPosition().y) { //If hit the platform row
+        
+        // 1 : Check platform hit 
+        float minX = m_platform.getPosition().x - m_settings.ball_size.x; //Minimum x hit
+        float maxX = m_platform.getPosition().x + (float) m_settings.platform_width; //Maximum x hit
+        float distanceYToPlatform = m_platform.getPosition().y-(m_ball.getPosition().y+m_settings.ball_size.y);
+        float distanceXToPlatfrom = distanceYToPlatform * distance.x / distance.y; //horizontal distance to hit the platform.
+        float xPositionHit = m_ball.getPosition().x+distanceXToPlatfrom; 
+
+        if (xPositionHit >= minX && xPositionHit <= maxX) { //If hit the platform
+            
+            //Increase speed every hit
+            m_settings.ball_speed=int((float)m_settings.ball_speed/1); 
+            
+            //2 : Moving the ball the required distance to hit the platform
+            newPosition.y = m_ball.getPosition().y + distanceYToPlatform;
+            newPosition.x = xPositionHit;
+            distance.x -= distanceXToPlatfrom;
+            distance.y -=distanceYToPlatform;
+
+            //3 : Changing direction
+            float midX = (minX + maxX)/2; //x position of a middle hit
+            float xDistanceMid = xPositionHit - midX; //distance to middle hit 
+            float cosDir = xDistanceMid/((maxX-minX)/2); //Position of the hit compared with the middle of the platform. From -1 to 1. 
+            float sinDir = sin(acos(cosDir));
+
+            m_ball.m_direction.x = cosDir;
+            m_ball.m_direction.y = -sinDir;
+
+            //Calculate true position from remaining distance after changed direction
+            newPosition.x += abs(distance.x) * m_ball.m_direction.x;
+            newPosition.y += abs(distance.y) * m_ball.m_direction.y;
+        }
     }
 
     m_timerBall=time;
@@ -135,6 +208,18 @@ void Game::tick() {
 
     delete newRow; //Free the last line from memory
 
+}
+
+//UTILITY METHODS
+
+//Return grid coordinates of given point in pixels.
+sf::Vector2i Game::findGridCoord(sf::Vector2f coords) {
+    int x, y;
+    x = (int)(coords.x/(float)((float)m_settings.window_width/(float)m_settings.grid_x_size));
+    y = (int)(coords.y/(float)((float)m_settings.window_height/(float)m_settings.grid_y_size));
+    x = x <= m_settings.grid_x_size ? x : -1;
+    y = y <= m_settings.grid_y_size ? y : -1;
+    return sf::Vector2i(x,y);
 }
 
 //ACCESSORS METHODS

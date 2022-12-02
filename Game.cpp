@@ -1,6 +1,7 @@
 #include "Game.hpp"
 #include <iostream>
 
+const Inter2f Inter2f::NULL_INTER = Inter2f(-1.f,-1.f,-1.f);
 
 //CONSTRUCTOR METHODS
 
@@ -181,7 +182,14 @@ void Game::movePlatform(int x) {
 
 //GAME LOGIC
 
-//Calculate the ball position and set a new one. Check collision and change the direction accordingly.
+/*
+1: Calculate the ball position and set a new one. 
+2 : Handle collision on bricks.
+- Check brick collision & update brick hit 
+- Destroy bricks
+- Take one remaining brick and change direction from which border was hitted first
+3 : 
+*/
 void Game::moveBall() {
 
     //Calculate ball position
@@ -200,24 +208,31 @@ void Game::moveBall() {
     
     /*
         Check collision on bricks
-        1 : Find every brick overlapping ball position
+        1 : Check brick collision & update brick hit 
         2 : Destroy bricks
         3 : Take one remaining brick and change direction from which border was hitted first
+        4 :  Empty bricksHit 
+        
+        //Then destroy the bricksHit, if at least one remaining change direction according to the edge colliding
+        //We have to change the direction for every colliding edge
     */
     
-    //1 : Find every brick overlapping ball position that have not been entered yet
+    //1 : Check brick collision & update brick hit 
 
-    std::vector<sf::Vector2i> bricksHit = checkBricksCollision(newPosition);
+    newPosition = checkBricksCollision(newPosition);
 
 
     // 2 : Destroy every hitted brick
 
-    destroyBricks(bricksHit);
+    destroyBricks();
 
     // 3 : If an hitted brick remains. Then we have to change direction
 
-    newPosition = handleBrickBounce(newPosition, bricksHit);
+    handleBrickBounce(newPosition);
 
+    // 4 : Empty bricksHit from non-destroyed bricks
+    
+    m_ball.m_bricksHit.clear(); 
     
     //Check Wall collision
     newPosition = checkWallCollision(newPosition,distance);
@@ -317,27 +332,19 @@ sf::Vector2f Game::calculatePlatformHit(sf::Vector2f newPosition, sf::Vector2f d
     return newPosition;
 }
 
-std::vector<sf::Vector2i> Game::checkBricksCollision(sf::Vector2f newPosition) {
+sf::Vector2f Game::checkBricksCollision(sf::Vector2f newPosition) {
     /*
-        Check collision on bricks
-        Find every brick overlapping ball position
-        Return a vector of coordinates of bricks.
+        Check collision on cells
+        //For every edge, check if a new cell was hitted along the trajectory
+        //Find the first edge(s) to hit some cell. Handle the case where multiple edge are colliding at the exact same time.
+        //Store the colliding edge in m_ball parameters
+        //Transform newPosition to stop at the hit position. 
+        //Find any non empty cell colliding with the ball
+        //Add them to the bricksHit
+        //Remove the bricks that are not in bricksHit anymore
        
     */
     
-    //For every edge, check if a new brick was hitted along the trajectory
-    //Find the first edge to hit some brick
-    //Transform newPosition to stop at the hit position. 
-    //Find any non empty brick colliding with the ball
-    //Add them to the bricksHit
-    
-    //Then destroy the bricksHit, if at least one remaining change direction according to the edge colliding
-    //Check case where 2 or even 3 edge are colliding brick at the same time. 
-    //Than would mean t are equals. 
-    //Then we would have to change the direction for every colliding edge
-    
-    std::vector<sf::Vector2i> bricksHit;
-
     sf::Vector2f corners[4];
     sf::Vector2f cornersN[4];
     corners[0] = m_ball.getPosition();
@@ -352,7 +359,7 @@ std::vector<sf::Vector2i> Game::checkBricksCollision(sf::Vector2f newPosition) {
     sf::Vector2f u = cornersN[0] - corners[0];
     std::vector<Inter2f> intersections;
 
-    //If the ball went up a brick, then we want to see the distance between the top edge and the upper row 
+    //If the ball went up a cell, then we want to see the distance between the top edge and the upper row 
     if (v.y < 0) {
         float yCD = (float)(findGridCoord(corners[0]).y-1)*m_brickSize.y;
         if (yCD>0.f) { //If we are not looking outisde the grid
@@ -362,7 +369,7 @@ std::vector<sf::Vector2i> Game::checkBricksCollision(sf::Vector2f newPosition) {
         }
     } 
     
-    //If the ball went down a brick, ... 
+    //If the ball went down a cell, ... 
     else if (v.y>0) {
         float yCD = (float)(findGridCoord(corners[2]).y+1)*m_brickSize.y;
         if (yCD<(float)m_videoMode.height) { //If we are not looking outisde the grid
@@ -396,48 +403,110 @@ std::vector<sf::Vector2i> Game::checkBricksCollision(sf::Vector2f newPosition) {
     }
 
     //Calculate exact colliding position with the shortest intersection distance
+    std::sort(intersections.begin(),intersections.end());
+    
+    //This check for multiple collision with cell and switch the colliding edge in the ball object.
+    auto i = intersections.begin();
+    do  {
+        m_ball.m_edgeHits[i->edge]=true;
+        i++;        
+    } while (i != intersections.end() && i->distance == (i+1)->distance);
+
+    //Virtually move the ball to the colliding position and return the new position
     Inter2f sInter = *(std::min_element(intersections.begin(),intersections.end()));
     newPosition = sf::Vector2f(corners[0].x+u.x*sInter.distance,corners[0].y+u.y*sInter.distance);
 
-    //Find every brick overlapping ball position
-    sf::Vector2f corners[4];
-    std::vector<sf::Vector2i> bricksHit;
-    corners[0] = sf::Vector2f(newPosition.x,newPosition.y);
-    corners[1] = sf::Vector2f(newPosition.x+m_ball.m_ballSize.x,newPosition.y);
-    corners[2] = sf::Vector2f(newPosition.x,newPosition.y+m_ball.m_ballSize.y);
-    corners[3] = sf::Vector2f(newPosition.x+m_ball.m_ballSize.x,newPosition.y+m_ball.m_ballSize.y);
 
-    //Looping through every bricks overlapping ball
-    for (int y = findGridCoord(corners[0]).y; y <= findGridCoord(corners[2]).y; y+=1) { 
-        for (int x = findGridCoord(corners[0]).x; x <= findGridCoord(corners[1]).x; x+=1) {
-            if (x >= 0 && x < m_grid_x_size && y >= 0 && y < m_grid_y_size && m_grid[y][x].m_strength) {
-                bricksHit.push_back(sf::Vector2i(x,y));
+    //Find every brick colliding ball
+    int xbegin = findGridCoord(newPosition).x; //Grid coordinates of ball 
+    int xend = findGridCoord(sf::Vector2f(newPosition.x+m_ball.m_ballSize.x,newPosition.y)).x;
+    int ybegin = findGridCoord(newPosition).y;
+    int yend = findGridCoord(sf::Vector2f(newPosition.x,newPosition.y+m_ball.m_ballSize.y)).y;
+    //TOP EDGE
+    if (m_ball.m_edgeHits[0]) {
+        //Loop every brick colliding with the top edge
+        for (int x = xbegin; x < xend; x++) {
+            if (m_grid[ybegin][x].m_strength > 0 && std::find(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),BrickHit(x,ybegin)) != m_ball.m_bricksHit.end()) {//If brick is not already in the vector
+                m_ball.m_bricksHit.push_back(BrickHit(x,ybegin,0));
+                m_grid[ybegin][x].m_ballInside = true;
             }
         }
     }
 
-    return bricksHit;
+    //BOTTOM EDGE
+    if (m_ball.m_edgeHits[2]) {
+        //Loop every brick colliding with the bottom edge
+        for (int x = xbegin; x < xend; x++) {
+            if (m_grid[yend][x].m_strength > 0 && std::find(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),BrickHit(x,yend)) != m_ball.m_bricksHit.end()) {//If brick is not already in the vector
+                m_ball.m_bricksHit.push_back(BrickHit(x,yend,2));
+                m_grid[yend][x].m_ballInside = true;
+            }
+        }
+    }
+
+    //RIGHT EDGE
+    if (m_ball.m_edgeHits[1]) {
+        //Loop every brick colliding with the right edge
+        for (int y = ybegin; y < yend; y++) {
+            if (m_grid[y][xend].m_strength > 0 && std::find(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),BrickHit(xend,y)) != m_ball.m_bricksHit.end()) {//If brick is not already in the vector
+                m_ball.m_bricksHit.push_back(BrickHit(xend,y,1));
+                m_grid[y][xend].m_ballInside = true;
+            }
+        }
+    }
+
+    //LEFT EDGE
+    if (m_ball.m_edgeHits[3]) {
+        //Loop every brick colliding with the left edge
+        for (int y = ybegin; y < yend; y++) {
+            if (m_grid[y][xbegin].m_strength > 0 && std::find(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),BrickHit(xbegin,y)) != m_ball.m_bricksHit.end()) {//If brick is not already in the vector
+                m_ball.m_bricksHit.push_back(BrickHit(xbegin,y,3)); 
+                m_grid[y][xbegin].m_ballInside = true; //(Trigger enter_brick event)
+            }
+        }
+    }
+
+    //Remove the brick which don't overlap the ball anymore
+    std::remove_if(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),
+        [xbegin,xend,ybegin,yend](const BrickHit &brick) { 
+            return (brick.x<xbegin || brick.x>xend || brick.y<ybegin || brick.y>ybegin); 
+        });
+    
+
+    return newPosition;
 }
 
-void Game::destroyBricks(std::vector<sf::Vector2i> bricks) {
-    for (sf::Vector2i& brick : bricks) {
-        m_grid[brick.y][brick.x].m_strength -= m_ball.m_ballWeigth;
+//Hit and damage every brick inside bricksHits vector. Remove them in the process.
+void Game::destroyBricks() {
+    
+    //Damage bricks
+    for (BrickHit& hit : m_ball.m_bricksHit) {
+        m_grid[hit.y][hit.x].m_strength -= m_ball.m_ballWeigth;
     }
+    
+    //Remove every destroyed brick from bricksHit
+    std::remove_if(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),
+        [&](BrickHit& brick) {
+            return (m_grid[brick.y][brick.x].m_strength == 0);
+        }
+    
+    );
+    
 }
 
 //Take one remaining brick and change direction from which border was hitted first
-sf::Vector2f Game::handleBrickBounce(sf::Vector2f newPosition, std::vector<sf::Vector2i> bricks) {
+void Game::handleBrickBounce(sf::Vector2f newPosition) {
 
     //Find the first brick remaining. !!!Cons : Always start from the upper-left corner of the ball!!!
-    sf::Vector2i brick(-1,-1);
-    for(auto cell : bricks) {
+    BrickHit brick(-1,-1);
+    for(auto cell : m_ball.m_bricksHit) {
         if (m_grid[cell.y][cell.x].m_strength) { //If cell non empty
             brick = cell;
             break;
         } 
     }
 
-    if (brick != sf::Vector2i(-1,-1)) { //If a brick was find
+    if (brick != BrickHit(-1,-1)) { //If a brick was find
 
         //The shortest distance between an origin corner and an intersection point determines which edge is touched first.
 
@@ -494,6 +563,7 @@ sf::Vector2f Game::handleBrickBounce(sf::Vector2f newPosition, std::vector<sf::V
         
         auto sInterIt = std::min_element(intersections.begin(),intersections.end());
         
+
         //
         if (sInterIt != intersections.end()) {
             Inter2f sInter(*sInterIt);
@@ -505,7 +575,6 @@ sf::Vector2f Game::handleBrickBounce(sf::Vector2f newPosition, std::vector<sf::V
         }
     }
 
-    return newPosition;
 }
 
 void Game::increaseBallSpeed() {
@@ -576,19 +645,15 @@ Return NULL_INTER constant if it no intersection.
 */
 Inter2f Game::findInter(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C, sf::Vector2f D) {
     
-    
-    
-    
-    
-    
+
     //Algorithm taken from https://nguyen.univ-tln.fr/share/GeomAlgo/trans_inter.pdf
 
     //Cramer determinant
-    float det = (B.x-A.x)*(C.y-C.y)-(C.x-C.x)*(B.y-A.y);
+    float det = (B.x-A.x)*(C.y-D.y)-(C.x-D.x)*(B.y-A.y);
     if (det ==0) return Inter2f::NULL_INTER; //If parallel
     
     //Find equation parameters
-    float t = ((C.x - A.x)*(C.y - C.y ) - (C.x - C.x )*(C.y - A.y))/det;
+    float t = ((C.x - A.x)*(C.y - D.y ) - (C.x - D.x )*(C.y - A.y))/det;
     float k = ((B.x - A.x)*(C.y - A.y) - (C.x - A.x)*(B.y - A.y))/det;
 
     if (t > 1 || t < 0 || k > 1 || k < 0) return Inter2f::NULL_INTER; //If no intersection on segments

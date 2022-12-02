@@ -27,7 +27,7 @@ enum BALL_EFFECT {unstoppable, heavy, explosive};
 class Inter2f : public sf::Vector2f {
     public: 
         using sf::Vector2f::Vector2f;
-        inline Inter2f(const float x, const float y, const float distance):x(x),y(y),distance(distance) {};
+        inline Inter2f(const float xx, const float yy, const float dis):x(xx),y(yy),distance(dis) {};
         bool operator<(Inter2f const &b);
         bool operator>(Inter2f const &b);   
         const static Inter2f NULL_INTER; 
@@ -39,8 +39,17 @@ class Inter2f : public sf::Vector2f {
         int edge;
         friend class Game;
 };
-const Inter2f Inter2f::NULL_INTER = Inter2f(-1.f,-1.f,-1.f);
 
+class BrickHit : public sf::Vector2i {
+    public : 
+        using sf::Vector2i::Vector2i;
+        inline BrickHit(int xx,int yy, int Edge):x(xx),y(yy),edge(Edge){};
+    private :
+        int x;
+        int y;
+        int edge;
+        friend class Game;
+};
 
 
 class Ball : public sf::RectangleShape {
@@ -51,6 +60,8 @@ class Ball : public sf::RectangleShape {
         sf::Vector2f m_ballSize;
         int m_ballWeigth;
         float m_ballSpeed;
+        std::vector<BrickHit> m_bricksHit;
+        bool m_edgeHits[4] = {0};
         friend class Game;
 };
 
@@ -107,9 +118,9 @@ class Game {
         std::clock_t m_timerBall;
         void moveBall();
         void tick();
-        std::vector<sf::Vector2i> checkBricksCollision(sf::Vector2f newPosition); 
-        void destroyBricks(std::vector<sf::Vector2i> bricks);
-        sf::Vector2f handleBrickBounce(sf::Vector2f newPosition, std::vector<sf::Vector2i> bricks);
+        sf::Vector2f checkBricksCollision(sf::Vector2f newPosition); 
+        void destroyBricks();
+        void handleBrickBounce(sf::Vector2f newPosition);
         sf::Vector2f checkWallCollision(sf::Vector2f newPosition, sf::Vector2f distance);
         sf::Vector2f calculatePlatformHit(sf::Vector2f newPosition, sf::Vector2f distance);
         void triggerBallEffect(enum BALL_EFFECT);

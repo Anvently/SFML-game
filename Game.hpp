@@ -27,14 +27,19 @@ enum BALL_EFFECT {unstoppable, heavy, explosive};
 class Inter2f : public sf::Vector2f {
     public: 
         using sf::Vector2f::Vector2f;
+        inline Inter2f(const float x, const float y, const float distance):x(x),y(y),distance(distance) {};
         bool operator<(Inter2f const &b);
-        bool operator>(Inter2f const &b);
+        bool operator>(Inter2f const &b);   
+        const static Inter2f NULL_INTER; 
     private:
+        float x;
+        float y;
         float distance;
         int corner;
         int edge;
         friend class Game;
 };
+const Inter2f Inter2f::NULL_INTER = Inter2f(-1.f,-1.f,-1.f);
 
 
 
@@ -57,6 +62,13 @@ class Platform : public sf::RectangleShape {
         friend class Game;
 };
 
+class Brick {
+    protected : 
+        int m_strength; //Number of remaining hit before the brick is destroyed 
+        bool m_ballInside; //Switch to true when the ball enter the brick. Switch to false when the ball leave the brick
+        friend class Game;
+};
+
 class Game {
     public:
         Game();
@@ -67,7 +79,6 @@ class Game {
         void pollEvent();
         bool isRunning();
         
-        
     private:
 
         //Init
@@ -77,10 +88,13 @@ class Game {
         int m_frameCount;
         sf::Event m_event;
         sf::VideoMode m_videoMode;
+        sf::Vector2f m_brickSize;
+        int m_grid_x_size;
+        int m_grid_y_size;
 
         //Game object
         Platform m_platform; 
-        int** m_grid; //The grid is designed as m_grid[y][x]
+        Brick** m_grid; //The grid is designed as m_grid[y][x] 
         Ball m_ball;
 
         //Player interaction
@@ -104,7 +118,9 @@ class Game {
 
         //Utility class
         sf::Vector2i findGridCoord(sf::Vector2f coords);
- 
+        Inter2f findInter(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C, sf::Vector2f D);
+        Inter2f findInterBis(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C);
+        float findTinter(float A,float B,float C);
 }; 
 
 #endif

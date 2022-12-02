@@ -2,7 +2,6 @@
 #include <iostream>
 
 
-
 //CONSTRUCTOR METHODS
 
 Game::Game() {
@@ -30,7 +29,7 @@ Game::Game(GameSettings settings) {
 Game::~Game() {
     delete m_window;
     //Free the memory allocated to the grid
-    for (int i = 0; i < m_settings.grid_y_size; i++) {
+    for (int i = 0; i < m_grid_y_size; i++) {
         delete m_grid[i];
     }
     delete m_grid;
@@ -95,19 +94,17 @@ void Game::render() {
     
 
     //Draw grid 
-    float size_x = (float) (m_settings.window_width/m_settings.grid_x_size);
-    float size_y = (float) (m_settings.window_height/m_settings.grid_y_size);
     sf::RectangleShape rect;
-    for (int y = 0; y < m_settings.grid_y_size; y++) {
-        for (int x = 0; x < m_settings.grid_x_size; x++) {
-            if (!m_grid[y][x]) continue;
+    for (int y = 0; y < m_grid_y_size; y++) {
+        for (int x = 0; x < m_grid_x_size; x++) {
+            if (!m_grid[y][x].m_strength) continue;
             
-            rect.setSize(sf::Vector2f(size_x,size_y));
-            rect.setPosition(sf::Vector2f(size_x*(float)x,size_y*(float)y));
-            if (m_grid[y][x] == 1) rect.setFillColor(sf::Color::Yellow);
-            else if (m_grid[y][x] == 2) rect.setFillColor(sf::Color::Green);
-            else if (m_grid[y][x] == 3) rect.setFillColor(sf::Color::Cyan);
-            else if (m_grid[y][x] == 4) rect.setFillColor(sf::Color::Blue);
+            rect.setSize(m_brickSize);
+            rect.setPosition(sf::Vector2f(m_brickSize.x*(float)x,m_brickSize.y*(float)y));
+            if (m_grid[y][x].m_strength == 1) rect.setFillColor(sf::Color::Yellow);
+            else if (m_grid[y][x].m_strength == 2) rect.setFillColor(sf::Color::Green);
+            else if (m_grid[y][x].m_strength == 3) rect.setFillColor(sf::Color::Cyan);
+            else if (m_grid[y][x].m_strength == 4) rect.setFillColor(sf::Color::Blue);
             rect.setOutlineColor(sf::Color::Green);
             rect.setOutlineThickness(-1.f);
             m_window->draw(rect);
@@ -135,15 +132,19 @@ void Game::initVariables() {
     m_timerBall = std::clock();
     m_frameCount = 0;
 
+    //Set window size
     m_videoMode.width = m_settings.window_width;
     m_videoMode.height = m_settings.window_height;
+    m_grid_x_size = m_settings.grid_x_size;
+    m_grid_y_size = m_settings.grid_y_size;
+    m_brickSize = sf::Vector2f((float)(m_videoMode.width/m_grid_x_size),(float)(m_videoMode.height/m_grid_y_size));
 
     //Initialize grid and fill it with 0.
-    m_grid = new int*[m_settings.grid_y_size];
-    for (int i=0; i<m_settings.grid_y_size; i++) {
-        m_grid[i] = new int[m_settings.grid_x_size];
-        for (int j = 0; j<m_settings.grid_x_size; j++) {
-            m_grid[i][j]=0;
+    m_grid = new Brick*[m_grid_y_size];
+    for (int i=0; i<m_grid_y_size; i++) {
+        m_grid[i] = new Brick[m_grid_x_size];
+        for (int j = 0; j<m_grid_x_size; j++) {
+            m_grid[i][j].m_strength=0;
         }
     }
 
@@ -166,7 +167,7 @@ void Game::initVariables() {
 void Game::initWindow() {
    
     m_window = new sf::RenderWindow(m_videoMode,"Game",sf::Style::Titlebar | sf::Style::Close);
-    //m_window->setFramerateLimit(144);
+    //m_window->setFramerateLimit(60);
 }
 
 //PLAYER INTERACTION
@@ -204,16 +205,16 @@ void Game::moveBall() {
         3 : Take one remaining brick and change direction from which border was hitted first
     */
     
-    //1 : Find every brick overlapping ball position
+    //1 : Find every brick overlapping ball position that have not been entered yet
 
     std::vector<sf::Vector2i> bricksHit = checkBricksCollision(newPosition);
 
 
-    // 2 : Destroy every brick overlapping the ball
+    // 2 : Destroy every hitted brick
 
     destroyBricks(bricksHit);
 
-    // 3 : If a bricks remains. Then we have to change direction
+    // 3 : If an hitted brick remains. Then we have to change direction
 
     newPosition = handleBrickBounce(newPosition, bricksHit);
 
@@ -324,6 +325,80 @@ std::vector<sf::Vector2i> Game::checkBricksCollision(sf::Vector2f newPosition) {
        
     */
     
+    //For every edge, check if a new brick was hitted along the trajectory
+    //Find the first edge to hit some brick
+    //Transform newPosition to stop at the hit position. 
+    //Find any non empty brick colliding with the ball
+    //Add them to the bricksHit
+    
+    //Then destroy the bricksHit, if at least one remaining change direction according to the edge colliding
+    //Check case where 2 or even 3 edge are colliding brick at the same time. 
+    //Than would mean t are equals. 
+    //Then we would have to change the direction for every colliding edge
+    
+    std::vector<sf::Vector2i> bricksHit;
+
+    sf::Vector2f corners[4];
+    sf::Vector2f cornersN[4];
+    corners[0] = m_ball.getPosition();
+    corners[1] = sf::Vector2f(m_ball.getPosition().x+m_ball.m_ballSize.x,m_ball.getPosition().y);
+    corners[2] = sf::Vector2f(m_ball.getPosition().x,m_ball.getPosition().y+m_ball.m_ballSize.y);
+    corners[3] = sf::Vector2f(m_ball.getPosition().x+m_ball.m_ballSize.x,m_ball.getPosition().y+m_ball.m_ballSize.y);
+    cornersN[0] = newPosition;
+    cornersN[1] = sf::Vector2f(newPosition.x+m_ball.m_ballSize.x,newPosition.y);
+    cornersN[2] = sf::Vector2f(newPosition.x,newPosition.y+m_ball.m_ballSize.y);
+    cornersN[3] = sf::Vector2f(newPosition.x+m_ball.m_ballSize.x,newPosition.y+m_ball.m_ballSize.y);
+    sf::Vector2i v = findGridCoord(cornersN[0])-findGridCoord(corners[0]); //Director vector in grid coordinates
+    sf::Vector2f u = cornersN[0] - corners[0];
+    std::vector<Inter2f> intersections;
+
+    //If the ball went up a brick, then we want to see the distance between the top edge and the upper row 
+    if (v.y < 0) {
+        float yCD = (float)(findGridCoord(corners[0]).y-1)*m_brickSize.y;
+        if (yCD>0.f) { //If we are not looking outisde the grid
+            Inter2f inter;
+            inter.distance = findTinter(corners[0].y,cornersN[0].y,yCD);
+            intersections.push_back(inter);
+        }
+    } 
+    
+    //If the ball went down a brick, ... 
+    else if (v.y>0) {
+        float yCD = (float)(findGridCoord(corners[2]).y+1)*m_brickSize.y;
+        if (yCD<(float)m_videoMode.height) { //If we are not looking outisde the grid
+            Inter2f inter;
+            inter.distance = findTinter(corners[2].y,cornersN[2].y,yCD);
+            inter.edge = 2;
+            intersections.push_back(inter);
+        }
+    }
+
+    //If the ball went right, we want to see the distance between the right edge and the right col 
+    else if (v.x>0) {
+        float xCD = (float)(findGridCoord(corners[1]).x+1)*m_brickSize.x;
+        if (xCD<(float)m_videoMode.width) { //If we are not looking outisde the grid
+            Inter2f inter;
+            inter.distance = findTinter(corners[1].x,cornersN[1].x,xCD);
+            inter.edge = 1;
+            intersections.push_back(inter);
+        }
+    }
+
+    //If the ball went left, ...
+    else if (v.x<0) {
+        float xCD = (float)(findGridCoord(corners[3]).x-1)*m_brickSize.x;
+        if (xCD>0.f) { //If we are not looking outisde the grid
+            Inter2f inter;
+            inter.distance = findTinter(corners[3].x,cornersN[3].x,xCD);
+            inter.edge = 3;
+            intersections.push_back(inter);
+        }
+    }
+
+    //Calculate exact colliding position with the shortest intersection distance
+    Inter2f sInter = *(std::min_element(intersections.begin(),intersections.end()));
+    newPosition = sf::Vector2f(corners[0].x+u.x*sInter.distance,corners[0].y+u.y*sInter.distance);
+
     //Find every brick overlapping ball position
     sf::Vector2f corners[4];
     std::vector<sf::Vector2i> bricksHit;
@@ -335,7 +410,7 @@ std::vector<sf::Vector2i> Game::checkBricksCollision(sf::Vector2f newPosition) {
     //Looping through every bricks overlapping ball
     for (int y = findGridCoord(corners[0]).y; y <= findGridCoord(corners[2]).y; y+=1) { 
         for (int x = findGridCoord(corners[0]).x; x <= findGridCoord(corners[1]).x; x+=1) {
-            if (x >= 0 && x < m_settings.grid_x_size && y >= 0 && y < m_settings.grid_y_size && m_grid[y][x]) {
+            if (x >= 0 && x < m_grid_x_size && y >= 0 && y < m_grid_y_size && m_grid[y][x].m_strength) {
                 bricksHit.push_back(sf::Vector2i(x,y));
             }
         }
@@ -346,7 +421,7 @@ std::vector<sf::Vector2i> Game::checkBricksCollision(sf::Vector2f newPosition) {
 
 void Game::destroyBricks(std::vector<sf::Vector2i> bricks) {
     for (sf::Vector2i& brick : bricks) {
-        m_grid[brick.y][brick.x] -= m_ball.m_ballWeigth;
+        m_grid[brick.y][brick.x].m_strength -= m_ball.m_ballWeigth;
     }
 }
 
@@ -356,7 +431,7 @@ sf::Vector2f Game::handleBrickBounce(sf::Vector2f newPosition, std::vector<sf::V
     //Find the first brick remaining. !!!Cons : Always start from the upper-left corner of the ball!!!
     sf::Vector2i brick(-1,-1);
     for(auto cell : bricks) {
-        if (m_grid[cell.y][cell.x]) { //If cell non empty
+        if (m_grid[cell.y][cell.x].m_strength) { //If cell non empty
             brick = cell;
             break;
         } 
@@ -379,14 +454,12 @@ sf::Vector2f Game::handleBrickBounce(sf::Vector2f newPosition, std::vector<sf::V
         cornersDest[1] = sf::Vector2f(newPosition.x+m_ball.m_ballSize.x,newPosition.y);
         cornersDest[2] = sf::Vector2f(newPosition.x,newPosition.y+m_ball.m_ballSize.y);
         cornersDest[3] = sf::Vector2f(newPosition.x+m_ball.m_ballSize.x,newPosition.y+m_ball.m_ballSize.y);
-        float grid_width = (float)m_videoMode.width/(float) m_settings.grid_x_size;
-        float grid_height = (float)m_videoMode.height/(float) m_settings.grid_y_size;
-        edgeOrigin[0] = sf::Vector2f((float)brick.x * grid_width,(float)brick.y * grid_height);
-        edgeDest[0] = sf::Vector2f(((float)brick.x+1.f)* grid_width,(float)brick.y * grid_height);
+        edgeOrigin[0] = sf::Vector2f((float)brick.x * m_brickSize.x,(float)brick.y * m_brickSize.y);
+        edgeDest[0] = sf::Vector2f(((float)brick.x+1.f)* m_brickSize.x,(float)brick.y * m_brickSize.y);
         edgeOrigin[1] = edgeDest[0];
-        edgeDest[1] = sf::Vector2f(((float)brick.x+1.f)* grid_width,((float)brick.y+1.f) * grid_height);
+        edgeDest[1] = sf::Vector2f(((float)brick.x+1.f)* m_brickSize.x,((float)brick.y+1.f) * m_brickSize.y);
         edgeOrigin[2] = edgeDest[1];
-        edgeDest[2] = sf::Vector2f((float)brick.x* grid_width,((float)brick.y+1.f) * grid_height);
+        edgeDest[2] = sf::Vector2f((float)brick.x* m_brickSize.x,((float)brick.y+1.f) * m_brickSize.y);
         edgeOrigin[3] = edgeDest[2];
         edgeDest[3] = edgeOrigin[1];
         
@@ -443,23 +516,23 @@ void Game::increaseBallSpeed() {
 void Game::tick() {
 
     //Creating random new row
-    int* newRow = (int*) calloc(m_settings.grid_x_size,sizeof(int));
+    Brick* newRow = (Brick*) calloc(m_grid_x_size,sizeof(Brick));
     std::mt19937 mt{ static_cast<unsigned int>(std::clock()) };
-    for (int x = 0; x < m_settings.grid_x_size; x++) {
+    for (int x = 0; x < m_grid_x_size; x++) {
         int s = mt()%2; //Strength of the cell
         if (s && (mt()%2) && (mt()%2)) s=2; //0.25 chances of having a 2 strength.
         if (s==2 && (mt()%2) && (mt()%2)) s=4; // 1/16 chances of having a 4 strength.
-        newRow[x]=s;
+        newRow[x].m_strength=s;
     }
 
     //Swaping row
-    for (int y = 0; y < m_settings.grid_y_size; y++) {
-        int* tempY=m_grid[y];
+    for (int y = 0; y < m_grid_y_size; y++) {
+        Brick* tempY=m_grid[y];
         m_grid[y] = newRow;
         newRow = tempY;
     }
 
-    delete newRow; //Free the last line from memory
+    delete[] newRow; //Free the last line from memory
 
 }
 
@@ -468,11 +541,63 @@ void Game::tick() {
 //Return grid coordinates of given point in pixels.
 sf::Vector2i Game::findGridCoord(sf::Vector2f coords) {
     int x, y;
-    x = (int)(coords.x/(float)((float)m_settings.window_width/(float)m_settings.grid_x_size));
-    y = (int)(coords.y/(float)((float)m_settings.window_height/(float)m_settings.grid_y_size));
-    x = x <= m_settings.grid_x_size ? x : -1;
-    y = y <= m_settings.grid_y_size ? y : -1;
+    x = (int)(coords.x/m_brickSize.x);
+    y = (int)(coords.y/m_brickSize.y);
+    x = x <= m_grid_x_size ? x : -1;
+    y = y <= m_grid_y_size ? y : -1;
     return sf::Vector2i(x,y);
+}
+
+Inter2f Game::findInterBis(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C) {
+    
+    sf::Vector2f v(B-A);
+
+    float tx = (C.x-A.x)/v.x;
+    float ty = (C.y-A.y)/v.y;
+    float t = std::min(tx,ty);
+    Inter2f inter(A.x+t*v.x,A.y+t*v.y);
+    inter.distance=t;
+    
+    return inter;
+}
+
+float Game::findTinter(float A,float B,float C) {
+    
+    float v = B-A;
+
+    float t = (C-A)/v;
+    
+    return t;
+}
+
+/*
+Return an Inter2f object with coordinates of the intersection if it exists.
+Return NULL_INTER constant if it no intersection.
+*/
+Inter2f Game::findInter(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C, sf::Vector2f D) {
+    
+    
+    
+    
+    
+    
+    //Algorithm taken from https://nguyen.univ-tln.fr/share/GeomAlgo/trans_inter.pdf
+
+    //Cramer determinant
+    float det = (B.x-A.x)*(C.y-C.y)-(C.x-C.x)*(B.y-A.y);
+    if (det ==0) return Inter2f::NULL_INTER; //If parallel
+    
+    //Find equation parameters
+    float t = ((C.x - A.x)*(C.y - C.y ) - (C.x - C.x )*(C.y - A.y))/det;
+    float k = ((B.x - A.x)*(C.y - A.y) - (C.x - A.x)*(B.y - A.y))/det;
+
+    if (t > 1 || t < 0 || k > 1 || k < 0) return Inter2f::NULL_INTER; //If no intersection on segments
+
+    //Intersection coordinates
+    Inter2f inter(A.x+t*(B.x-A.x),A.y+t*(B.y-A.y));
+    inter.distance = t;
+
+    return inter;
 }
 
 //ACCESSORS METHODS
@@ -491,4 +616,44 @@ bool Inter2f::operator>(Inter2f const &b) {
     return (this->distance > b.distance);
 }
 
+    /*
+    //If the ball went up a brick, then we want to see the distance between the top edge and the upper row 
+    if (v.y < 0) {
+        float yCD = (float)(findGridCoord(corners[0]).y-1)*m_brickSize.y;
+        if (yCD>0.f) { //If we are not looking outisde the grid
+            Inter2f inter = findInter(corners[0],cornersN[0],sf::Vector2f(0.f,yCD),sf::Vector2f((float) m_videoMode.width,yCD));
+            inter.edge = 0;
+            intersections.push_back(inter);
+        }
+    } 
+    
+    //If the ball went down a brick, ... 
+    else if (v.y>0) {
+        float yCD = (float)(findGridCoord(corners[2]).y+1)*m_brickSize.y;
+        if (yCD<(float)m_videoMode.height) { //If we are not looking outisde the grid
+            Inter2f inter = findInter(corners[2],cornersN[2],sf::Vector2f(0.f,yCD),sf::Vector2f((float) m_videoMode.width,yCD));
+            inter.edge = 2;
+            intersections.push_back(inter);
+        }
+    }
 
+    //If the ball went right, we want to see the distance between the right edge and the right col 
+    else if (v.x>0) {
+        float xCD = (float)(findGridCoord(corners[1]).x+1)*m_brickSize.x;
+        if (xCD<(float)m_videoMode.width) { //If we are not looking outisde the grid
+            Inter2f inter = findInter(corners[1],cornersN[1],sf::Vector2f(xCD,0.f),sf::Vector2f(xCD,(float)m_videoMode.height));
+            inter.edge = 1;
+            intersections.push_back(inter);
+        }
+    }
+
+    //If the ball went left, ...
+    else if (v.x<0) {
+        float xCD = (float)(findGridCoord(corners[3]).x-1)*m_brickSize.x;
+        if (xCD>0.f) { //If we are not looking outisde the grid
+            Inter2f inter = findInter(corners[3],cornersN[3],sf::Vector2f(xCD,0.f),sf::Vector2f(xCD,(float)m_videoMode.height));
+            inter.edge = 3;
+            intersections.push_back(inter);
+        }
+    }
+    */

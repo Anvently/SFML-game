@@ -27,23 +27,30 @@ enum BALL_EFFECT {unstoppable, heavy, explosive};
 class Inter2f : public sf::Vector2f {
     public: 
         using sf::Vector2f::Vector2f;
+        Inter2f():x(-0.f),y(-0.f),distance(0.f),corner(-1),edge(-1){};
         inline Inter2f(const float xx, const float yy, const float dis):x(xx),y(yy),distance(dis) {};
         bool operator<(Inter2f const &b);
         bool operator>(Inter2f const &b);   
         const static Inter2f NULL_INTER; 
-    private:
         float x;
         float y;
         float distance;
+    private:
+        
         int corner;
         int edge;
         friend class Game;
 };
 
+
+
 class BrickHit : public sf::Vector2i {
     public : 
         using sf::Vector2i::Vector2i;
-        inline BrickHit(int xx,int yy, int Edge):x(xx),y(yy),edge(Edge){};
+        BrickHit(int xx, int yy):x(xx),y(yy){};
+        BrickHit():x(-1),y(-1),edge(-1){};
+        BrickHit(int xx,int yy, int Edge):x(xx),y(yy),edge(Edge){};
+        friend bool operator==(BrickHit const& l,BrickHit const& r);
     private :
         int x;
         int y;
@@ -60,7 +67,9 @@ class Ball : public sf::RectangleShape {
         sf::Vector2f m_ballSize;
         int m_ballWeigth;
         float m_ballSpeed;
-        std::vector<BrickHit> m_bricksHit;
+        sf::Vector2f m_position; //Current position of the ball during movements calculation 
+        sf::Vector2f m_distance; //Flat distance remaining to be traveled in a ball move
+        std::vector<BrickHit> m_bricksHit; //Vector of BrickHit coordinates of the brick hitted at t time
         bool m_edgeHits[4] = {0};
         friend class Game;
 };
@@ -118,11 +127,12 @@ class Game {
         std::clock_t m_timerBall;
         void moveBall();
         void tick();
-        sf::Vector2f checkBricksCollision(sf::Vector2f newPosition); 
+        void checkCellCollision(); 
         void destroyBricks();
-        void handleBrickBounce(sf::Vector2f newPosition);
-        sf::Vector2f checkWallCollision(sf::Vector2f newPosition, sf::Vector2f distance);
-        sf::Vector2f calculatePlatformHit(sf::Vector2f newPosition, sf::Vector2f distance);
+        bool ballBounce();
+        void checkWallCollision();
+        bool checkPlatformCollision();
+        void calculatePlatformHit();
         void triggerBallEffect(enum BALL_EFFECT);
         void changeBallSize(float coeff);
         void increaseBallSpeed();

@@ -13,7 +13,7 @@ Game::Game() {
                 1500, //tick_interval
                 40, //grid_x_size
                 30, //grid_y_size
-                sf::Vector2f(40.f,20.f), //ball_size
+                sf::Vector2f(200.f,10.f), //ball_size
                 100, //ball_speed
                 1 //ball_weigth
     };
@@ -207,11 +207,7 @@ void Game::moveBall() {
     if (abs(distanceFlat.x*m_ball.m_direction.x) > 1.f || abs(distanceFlat.y*m_ball.m_direction.y) > 1.f) {
     
         sf::Vector2f oldPosition(-1.f,-1.f);
-        while ((sf::Vector2i) m_ball.m_position != (sf::Vector2i) oldPosition) { //Continue while collision happen
-            std::cout<<"x : "<<oldPosition.x<<" , "<<m_ball.m_position.x<<std::endl;
-            std::cout<<"y : "<<oldPosition.y<<" , "<<m_ball.m_position.y<<std::endl;
-            std::cout<<"Distance restante : "<<m_ball.m_distance.x<<" , "<<m_ball.m_distance.y<<std::endl;
-            std::cout<<"Direction : "<<m_ball.m_direction.x<<" , "<<m_ball.m_direction.y<<std::endl;
+        while ((m_ball.m_distance.x > 0.f || m_ball.m_distance.y > 0.f) && (sf::Vector2i) m_ball.m_position != (sf::Vector2i) oldPosition) { //Continue while collision happen
             oldPosition = m_ball.m_position;
 
             
@@ -240,7 +236,6 @@ void Game::moveBall() {
 
             if(ballBounce()) {
                 //If a wall or a brick was hit, then we recheck for bounce before checking platform hit
-                std::cout<<"passage"<<std::endl;
                 continue; 
             }
             // 4 : Empty bricksHit from non-destroyed bricks
@@ -267,8 +262,6 @@ void Game::moveBall() {
 
         //If distance remains
         //Move the ball to the new position
-        std::cout<<"Position before adding remaining distance "<<m_ball.m_position.x<<" , "<<m_ball.m_position.y<<std::endl<<std::endl;
-        std::cout<<"Remaining distance : "<<m_ball.m_distance.x<<" , "<<m_ball.m_distance.y<<std::endl;
         sf::Vector2f distance(m_ball.m_distance.x*m_ball.m_direction.x,
             m_ball.m_distance.y*m_ball.m_direction.y
         ); 
@@ -279,7 +272,6 @@ void Game::moveBall() {
         m_timerBall=time;
         m_ball.m_position = newPosition;
 
-        std::cout<<"Position after adding remaining distance "<<m_ball.m_position.x<<" , "<<m_ball.m_position.y<<std::endl<<std::endl;
 
         m_ball.setPosition(newPosition);
 
@@ -354,8 +346,7 @@ bool Game::checkPlatformCollision() {
 
         if (intersect.x >= minX && intersect.x <= maxX) { //If hit the platform
             
-
-            m_ball.m_position = sf::Vector2f(intersect.x,intersect.y);
+            m_ball.m_position = sf::Vector2f(roundf((m_ball.m_position.x+distance.x*t)*100000.f)/100000.f,roundf((m_ball.m_position.y+distance.y*t)*100000.f)/100000.f);
             //Update the distance travelled and switch it to flat distance
             distance.x= (distance.x - (distance.x*t))/m_ball.m_direction.x;
             distance.y= (distance.y - (distance.y*t))/m_ball.m_direction.y;
@@ -421,8 +412,6 @@ void Game::checkCellCollision() {
     cornersN[1] = sf::Vector2f(newPosition.x+m_ball.m_ballSize.x,newPosition.y);
     cornersN[2] = sf::Vector2f(newPosition.x+m_ball.m_ballSize.x,newPosition.y+m_ball.m_ballSize.y);
     cornersN[3] = sf::Vector2f(newPosition.x,newPosition.y+m_ball.m_ballSize.y);
-    sf::Vector2i v = findGridCoord(cornersN[0])-findGridCoord(corners[0]); //Director vector in grid coordinates
-    sf::Vector2f u = cornersN[0] - corners[0]; //Movement vector in pixels
     std::vector<Inter2f> intersections; //List of intersections between ball and grid cells along the trajectory
 
     //If the ball went up a cell, then we want to see the distance between the top edge and the upper row 
@@ -431,7 +420,6 @@ void Game::checkCellCollision() {
             (float)(findGridCoord(corners[0]).y)*m_brickSize.y //yCD = current row
             : corners[0].y - m_brickSize.y; //yCD = next row
         //if (yCD == 0.f) //Wall collision
-        std::cout<<"yCD = "<<yCD<<std::endl;
         Inter2f inter;
         inter.distance = findTinter(corners[0].y,cornersN[0].y,yCD);
         inter.edge = 0;
@@ -442,7 +430,6 @@ void Game::checkCellCollision() {
     //If the ball went down a cell, ... 
     else if (m_ball.m_direction.y>0) {
         float yCD = (float)(findGridCoord(corners[2]).y+1)*m_brickSize.y;
-        std::cout<<"yCD = "<<yCD<<std::endl;
         //if (yCD==(float)m_videoMode.height) //Wall collision
         Inter2f inter;
         inter.distance = findTinter(corners[2].y,cornersN[2].y,yCD);
@@ -467,7 +454,6 @@ void Game::checkCellCollision() {
         float xCD = corners[3].x - (float)findGridCoord(corners[3]).x*m_brickSize.x != 0.f ? //If already at the col, then we look for the previous col
             (float)(findGridCoord(corners[3]).x)*m_brickSize.x  //xCD = current col
             : corners[3].x - m_brickSize.x; //xCD = next col
-        std::cout<<"xCD = "<<xCD<<std::endl;
         // if (xCD==0.f)  //Wall collision
         Inter2f inter;
         inter.distance = abs(findTinter(corners[3].x,cornersN[3].x,xCD));
@@ -494,10 +480,7 @@ void Game::checkCellCollision() {
 
         //Virtually move the ball to the colliding position and return the new position
         Inter2f sInter = *(std::min_element(intersections.begin(),intersections.end()));
-        std::cout<<"sInter.distance = "<<sInter.distance<<std::endl;
-        std::cout<<"float x to round = "<<corners[0].x+u.x*sInter.distance<<std::endl;
-        std::cout<<"float y to round = "<<corners[0].y+u.y*sInter.distance<<std::endl;
-        newPosition = sf::Vector2f(roundf((corners[0].x+u.x*sInter.distance)*100000.f)/100000.f,roundf((corners[0].y+u.y*sInter.distance)*100000.f)/100000.f);
+        newPosition = sf::Vector2f(roundf((corners[0].x+distance.x*sInter.distance)*100000.f)/100000.f,roundf((corners[0].y+distance.y*sInter.distance)*100000.f)/100000.f);
         //Update the distance travelled and switch it to flat distance
         distance.x= (distance.x - (distance.x*sInter.distance))/m_ball.m_direction.x;
         distance.y= (distance.y - (distance.y*sInter.distance))/m_ball.m_direction.y;
@@ -505,12 +488,6 @@ void Game::checkCellCollision() {
         m_ball.m_position = newPosition;
         m_ball.m_distance = distance;
 
-        std::cout<<std::endl<<"v = "<<v.x<<" , "<<v.y<<std::endl;
-        std::cout<<"corner = "<<corners[0].x<<" , "<<corners[0].y<<std::endl;
-        std::cout<<"cornerN = "<<cornersN[0].x<<" , "<<cornersN[0].y<<std::endl;
-        std::cout<<"t = "<<sInter.distance<<std::endl;
-        std::cout<<"New position after intersect detection "<<m_ball.m_position.x<<" , "<<m_ball.m_position.y<<std::endl<<std::endl;
-        
 
     }
 
@@ -537,10 +514,12 @@ void Game::checkCellCollision() {
         //BOTTOM EDGE
         if (m_ball.m_edgeHits[2]) {
             //Loop every brick colliding with the bottom edge
-            for (int x = xbegin; x < xend; x++) {
-                if (m_grid[yend][x].m_strength > 0 && std::find(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),BrickHit(x,yend)) != m_ball.m_bricksHit.end()) {//If brick is not already in the vector
-                    m_ball.m_bricksHit.push_back(BrickHit(x,yend,2));
-                    m_grid[yend][x].m_ballInside = true;
+            if (yend < m_grid_y_size) {//Make sure the bal is not colliding the right wall. The last col being yend-1 .
+                for (int x = xbegin; x < xend; x++) {
+                    if (m_grid[yend][x].m_strength > 0 && std::find(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),BrickHit(x,yend)) != m_ball.m_bricksHit.end()) {//If brick is not already in the vector
+                        m_ball.m_bricksHit.push_back(BrickHit(x,yend,2));
+                        m_grid[yend][x].m_ballInside = true;
+                    }
                 }
             }
         }
@@ -548,21 +527,25 @@ void Game::checkCellCollision() {
         //RIGHT EDGE
         if (m_ball.m_edgeHits[1]) {
             //Loop every brick colliding with the right edge
-            for (int y = ybegin; y < yend; y++) {
-                if (m_grid[y][xend].m_strength > 0 && std::find(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),BrickHit(xend,y)) != m_ball.m_bricksHit.end()) {//If brick is not already in the vector
-                    m_ball.m_bricksHit.push_back(BrickHit(xend,y,1));
-                    m_grid[y][xend].m_ballInside = true;
+            if (yend < m_grid_y_size) {//Make sure the bal is not colliding the right wall. The last col being yend-1 .
+                for (int y = ybegin; y < yend; y++) {
+                    if (m_grid[y][xend].m_strength > 0 && std::find(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),BrickHit(xend,y)) != m_ball.m_bricksHit.end()) {//If brick is not already in the vector
+                        m_ball.m_bricksHit.push_back(BrickHit(xend,y,1));
+                        m_grid[y][xend].m_ballInside = true;
+                    }
                 }
             }
         }
 
         //LEFT EDGE
         if (m_ball.m_edgeHits[3]) {
-            //Loop every brick colliding with the left edge
-            for (int y = ybegin; y < yend; y++) {
-                if (m_grid[y][xbegin].m_strength > 0 && std::find(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),BrickHit(xbegin,y)) != m_ball.m_bricksHit.end()) {//If brick is not already in the vector
-                    m_ball.m_bricksHit.push_back(BrickHit(xbegin,y,3)); 
-                    m_grid[y][xbegin].m_ballInside = true; //(Trigger enter_brick event)
+            if (yend < m_grid_y_size) {//Make sure the bal is not colliding the right wall. The last col being yend-1 .
+                //Loop every brick colliding with the left edge
+                for (int y = ybegin; y < yend; y++) {
+                    if (m_grid[y][xbegin].m_strength > 0 && std::find(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),BrickHit(xbegin,y)) != m_ball.m_bricksHit.end()) {//If brick is not already in the vector
+                        m_ball.m_bricksHit.push_back(BrickHit(xbegin,y,3)); 
+                        m_grid[y][xbegin].m_ballInside = true; //(Trigger enter_brick event)
+                    }
                 }
             }
         }
@@ -622,7 +605,7 @@ bool Game::ballBounce() {
     if (
         (m_ball.m_position.y == 0.f && m_ball.m_direction.y < 0.f)  
         || (m_ball.m_position.y + m_ball.m_ballSize.y == (float) m_videoMode.height && m_ball.m_direction.y > 0)
-        )  {std::cout<<"CHANGE OF DIRECTION"<<std::endl; m_ball.m_direction.y = -m_ball.m_direction.y;}
+        )  m_ball.m_direction.y = -m_ball.m_direction.y;
 
     if (
         (m_ball.m_position.x == 0.f && m_ball.m_direction.x < 0.f)

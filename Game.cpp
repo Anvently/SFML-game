@@ -76,7 +76,7 @@ void Game::update() {
 
     if ((std::clock() - m_timerTick) >= m_settings.tick_interval) { //Tick counter
         //TICK INSTRUCTION
-        tick();
+        //tick();
 
         m_timerTick = std::clock();
     }
@@ -159,7 +159,7 @@ void Game::initVariables() {
     m_ball.setFillColor(sf::Color::Magenta);
     m_ball.setSize(m_settings.ball_size);
     m_ball.m_ballSize = m_settings.ball_size;
-    m_ball.m_direction=sf::Vector2f(-0.5,-1.f);
+    m_ball.m_direction=sf::Vector2f((float)-0.5,-1.f);
     m_ball.m_ballWeigth=m_settings.ball_weigth;
     m_ball.m_ballSpeed=(float)m_settings.ball_speed;
     m_ball.setPosition((float)m_settings.window_width/2.f+m_ball.m_ballSize.x/2.f,m_platform.getPosition().y-m_ball.m_ballSize.y);
@@ -267,7 +267,8 @@ void Game::moveBall() {
 
         //If distance remains
         //Move the ball to the new position
-
+        std::cout<<"Position before adding remaining distance "<<m_ball.m_position.x<<" , "<<m_ball.m_position.y<<std::endl<<std::endl;
+        std::cout<<"Remaining distance : "<<m_ball.m_distance.x<<" , "<<m_ball.m_distance.y<<std::endl;
         sf::Vector2f distance(m_ball.m_distance.x*m_ball.m_direction.x,
             m_ball.m_distance.y*m_ball.m_direction.y
         ); 
@@ -277,6 +278,9 @@ void Game::moveBall() {
 
         m_timerBall=time;
         m_ball.m_position = newPosition;
+
+        std::cout<<"Position after adding remaining distance "<<m_ball.m_position.x<<" , "<<m_ball.m_position.y<<std::endl<<std::endl;
+
         m_ball.setPosition(newPosition);
 
     }
@@ -423,8 +427,11 @@ void Game::checkCellCollision() {
 
     //If the ball went up a cell, then we want to see the distance between the top edge and the upper row 
     if (m_ball.m_direction.y < 0) {
-        float yCD = (int)corners[0].y % (int)m_brickSize.y != 0 ? (float)(findGridCoord(corners[0]).y)*m_brickSize.y : corners[0].y - m_brickSize.y;
+        float yCD = corners[0].y - (float)findGridCoord(corners[0]).y*m_brickSize.y != 0.f ? //If already at the row, then we look for the previous row
+            (float)(findGridCoord(corners[0]).y)*m_brickSize.y //yCD = current row
+            : corners[0].y - m_brickSize.y; //yCD = next row
         //if (yCD == 0.f) //Wall collision
+        std::cout<<"yCD = "<<yCD<<std::endl;
         Inter2f inter;
         inter.distance = findTinter(corners[0].y,cornersN[0].y,yCD);
         inter.edge = 0;
@@ -457,12 +464,13 @@ void Game::checkCellCollision() {
 
     //If the ball went left, ...
     else if (m_ball.m_direction.x<0) {      
-        float xCD = (int)corners[3].x % (int)m_brickSize.x != 0 ? (float)(findGridCoord(corners[3]).x)*m_brickSize.x : corners[3].x - m_brickSize.x;
+        float xCD = corners[3].x - (float)findGridCoord(corners[3]).x*m_brickSize.x != 0.f ? //If already at the col, then we look for the previous col
+            (float)(findGridCoord(corners[3]).x)*m_brickSize.x  //xCD = current col
+            : corners[3].x - m_brickSize.x; //xCD = next col
         std::cout<<"xCD = "<<xCD<<std::endl;
         // if (xCD==0.f)  //Wall collision
         Inter2f inter;
         inter.distance = abs(findTinter(corners[3].x,cornersN[3].x,xCD));
-        std::cout<<"distance = "<<inter.distance<<std::endl;
         inter.edge = 3;
         if (inter.distance <= 1.f) intersections.push_back(inter);
         
@@ -486,7 +494,10 @@ void Game::checkCellCollision() {
 
         //Virtually move the ball to the colliding position and return the new position
         Inter2f sInter = *(std::min_element(intersections.begin(),intersections.end()));
-        newPosition = sf::Vector2f(corners[0].x+u.x*sInter.distance,corners[0].y+u.y*sInter.distance);
+        std::cout<<"sInter.distance = "<<sInter.distance<<std::endl;
+        std::cout<<"float x to round = "<<corners[0].x+u.x*sInter.distance<<std::endl;
+        std::cout<<"float y to round = "<<corners[0].y+u.y*sInter.distance<<std::endl;
+        newPosition = sf::Vector2f(roundf((corners[0].x+u.x*sInter.distance)*100000.f)/100000.f,roundf((corners[0].y+u.y*sInter.distance)*100000.f)/100000.f);
         //Update the distance travelled and switch it to flat distance
         distance.x= (distance.x - (distance.x*sInter.distance))/m_ball.m_direction.x;
         distance.y= (distance.y - (distance.y*sInter.distance))/m_ball.m_direction.y;
@@ -498,7 +509,7 @@ void Game::checkCellCollision() {
         std::cout<<"corner = "<<corners[0].x<<" , "<<corners[0].y<<std::endl;
         std::cout<<"cornerN = "<<cornersN[0].x<<" , "<<cornersN[0].y<<std::endl;
         std::cout<<"t = "<<sInter.distance<<std::endl;
-        std::cout<<"Ball has moved of (x: "<<distance.x*sInter.distance<<" , y: "<<distance.y*sInter.distance<<std::endl<<std::endl;
+        std::cout<<"New position after intersect detection "<<m_ball.m_position.x<<" , "<<m_ball.m_position.y<<std::endl<<std::endl;
         
 
     }
@@ -609,12 +620,12 @@ bool Game::ballBounce() {
 
     //Check wall collision
     if (
-        (m_ball.m_position.y == 0 && m_ball.m_direction.y < 0)  
+        (m_ball.m_position.y == 0.f && m_ball.m_direction.y < 0.f)  
         || (m_ball.m_position.y + m_ball.m_ballSize.y == (float) m_videoMode.height && m_ball.m_direction.y > 0)
-        )  m_ball.m_direction.y = -m_ball.m_direction.y;
+        )  {std::cout<<"CHANGE OF DIRECTION"<<std::endl; m_ball.m_direction.y = -m_ball.m_direction.y;}
 
     if (
-        (m_ball.m_position.x == 0 && m_ball.m_direction.x < 0)
+        (m_ball.m_position.x == 0.f && m_ball.m_direction.x < 0.f)
         || (m_ball.m_position.x + m_ball.m_ballSize.x == (float) m_videoMode.width && m_ball.m_direction.x > 0)
         ) m_ball.m_direction.x = -m_ball.m_direction.x;
 
@@ -739,47 +750,3 @@ bool operator==(BrickHit const& l,BrickHit const& r) {
     bool b = l.x == r.x && l.y == r.y;
     return b;
 }
-
-
-
-    /*
-    //If the ball went up a brick, then we want to see the distance between the top edge and the upper row 
-    if (v.y < 0) {
-        float yCD = (float)(findGridCoord(corners[0]).y-1)*m_brickSize.y;
-        if (yCD>0.f) { //If we are not looking outisde the grid
-            Inter2f inter = findInter(corners[0],cornersN[0],sf::Vector2f(0.f,yCD),sf::Vector2f((float) m_videoMode.width,yCD));
-            inter.edge = 0;
-            intersections.push_back(inter);
-        }
-    } 
-    
-    //If the ball went down a brick, ... 
-    else if (v.y>0) {
-        float yCD = (float)(findGridCoord(corners[2]).y+1)*m_brickSize.y;
-        if (yCD<(float)m_videoMode.height) { //If we are not looking outisde the grid
-            Inter2f inter = findInter(corners[2],cornersN[2],sf::Vector2f(0.f,yCD),sf::Vector2f((float) m_videoMode.width,yCD));
-            inter.edge = 2;
-            intersections.push_back(inter);
-        }
-    }
-
-    //If the ball went right, we want to see the distance between the right edge and the right col 
-    else if (v.x>0) {
-        float xCD = (float)(findGridCoord(corners[1]).x+1)*m_brickSize.x;
-        if (xCD<(float)m_videoMode.width) { //If we are not looking outisde the grid
-            Inter2f inter = findInter(corners[1],cornersN[1],sf::Vector2f(xCD,0.f),sf::Vector2f(xCD,(float)m_videoMode.height));
-            inter.edge = 1;
-            intersections.push_back(inter);
-        }
-    }
-
-    //If the ball went left, ...
-    else if (v.x<0) {
-        float xCD = (float)(findGridCoord(corners[3]).x-1)*m_brickSize.x;
-        if (xCD>0.f) { //If we are not looking outisde the grid
-            Inter2f inter = findInter(corners[3],cornersN[3],sf::Vector2f(xCD,0.f),sf::Vector2f(xCD,(float)m_videoMode.height));
-            inter.edge = 3;
-            intersections.push_back(inter);
-        }
-    }
-    */

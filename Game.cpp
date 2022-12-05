@@ -13,7 +13,7 @@ Game::Game() {
                 1500, //tick_interval
                 40, //grid_x_size
                 30, //grid_y_size
-                sf::Vector2f(200.f,10.f), //ball_size
+                sf::Vector2f(10.f,100.f), //ball_size
                 100, //ball_speed
                 1 //ball_weigth
     };
@@ -207,7 +207,11 @@ void Game::moveBall() {
     if (abs(distanceFlat.x*m_ball.m_direction.x) > 1.f || abs(distanceFlat.y*m_ball.m_direction.y) > 1.f) {
     
         sf::Vector2f oldPosition(-1.f,-1.f);
-        while ((m_ball.m_distance.x > 0.f || m_ball.m_distance.y > 0.f) && (sf::Vector2i) m_ball.m_position != (sf::Vector2i) oldPosition) { //Continue while collision happen
+        while ((m_ball.m_distance.x > 0.f || m_ball.m_distance.y > 0.f) && m_ball.m_position !=  oldPosition) { //Continue while collision happen
+            
+           // std::cout<<"Ancienne position : x = "<<oldPosition.x<<", y = "<<oldPosition.y<<std::endl;
+            //std::cout<<"Nouvelle position : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
+            //std::cout<<"Distance restante : x = "<<m_ball.m_distance.x<<", y = "<<m_ball.m_distance.y<<std::endl<<std::endl;
             oldPosition = m_ball.m_position;
 
             
@@ -262,59 +266,16 @@ void Game::moveBall() {
 
         //If distance remains
         //Move the ball to the new position
-        sf::Vector2f distance(m_ball.m_distance.x*m_ball.m_direction.x,
-            m_ball.m_distance.y*m_ball.m_direction.y
-        ); 
-        sf::Vector2f newPosition(m_ball.m_position.x + distance.x,
-            m_ball.m_position.y + distance.y
-        );
+        updateBallPosition(1.f);
 
         m_timerBall=time;
-        m_ball.m_position = newPosition;
 
 
-        m_ball.setPosition(newPosition);
+        m_ball.setPosition(m_ball.m_position);
 
     }
 }
 
-
-/*
-        Check collision on walls
-        1: Start with side wall 
-        2: Check upper wall
-        Return the computed new position and change the direction of the ball 
-*/
-void Game::checkWallCollision () {
-    
-    sf::Vector2f distance(m_ball.m_distance.x*m_ball.m_direction.x,
-        m_ball.m_distance.y*m_ball.m_direction.y
-    ); 
-    sf::Vector2f newPosition(m_ball.m_position.x + distance.x,
-        m_ball.m_position.y + distance.y
-    );
-
-    //1 : Check side wall collision
-    if (newPosition.x < 0) { //If going through left wall
-        newPosition.x = -distance.x - m_ball.m_position.x; 
-        m_ball.m_direction.x=-m_ball.m_direction.x;
-    } else if (newPosition.x > (float) m_settings.window_width - m_ball.m_ballSize.x) {//If going through right wall
-        float distanceToWall = (float) m_settings.window_width - (m_ball.m_position.x + m_ball.m_ballSize.x);
-        newPosition.x += -distance.x + distanceToWall;
-        m_ball.m_direction.x=-m_ball.m_direction.x;
-    }
-
-    //2 : Check upper wall collision
-    if (newPosition.y < 0) { //If going through upper wall
-        newPosition.y = -distance.y - m_ball.m_position.y; 
-        m_ball.m_direction.y=-m_ball.m_direction.y;
-    }
-
-    //MODIFY ball position and distance
-    m_ball.m_position = newPosition;
-    m_ball.m_distance = distance;
-
-}
 
 /*
 Check if there is a collision with platform. 
@@ -346,11 +307,9 @@ bool Game::checkPlatformCollision() {
 
         if (intersect.x >= minX && intersect.x <= maxX) { //If hit the platform
             
-            m_ball.m_position = sf::Vector2f(roundf((m_ball.m_position.x+distance.x*t)*100000.f)/100000.f,roundf((m_ball.m_position.y+distance.y*t)*100000.f)/100000.f);
+            updateBallPosition(t);
             //Update the distance travelled and switch it to flat distance
-            distance.x= (distance.x - (distance.x*t))/m_ball.m_direction.x;
-            distance.y= (distance.y - (distance.y*t))/m_ball.m_direction.y;
-            m_ball.m_distance = distance;
+            updateBallDistance(t);
 
             return true;
             
@@ -377,8 +336,8 @@ void Game::calculatePlatformHit(){
     float cosDir = xDistanceMid/((maxX-minX)/2); //Position of the hit compared with the middle of the platform. From -1 to 1. 
     float sinDir = sin(acos(cosDir));
 
-    m_ball.m_direction.x = cosDir;
-    m_ball.m_direction.y = -sinDir;
+    m_ball.m_direction.x = roundf(cosDir*100.f)/100.f;
+    m_ball.m_direction.y = roundf(-sinDir*100.f)/100.f;
 
 }
 
@@ -394,6 +353,7 @@ Check collision on cells
 */
 void Game::checkCellCollision() {
     
+    std::cout<<"Nouvelle position avant check : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
 
     sf::Vector2f distance(m_ball.m_distance.x*m_ball.m_direction.x,
         m_ball.m_distance.y*m_ball.m_direction.y
@@ -401,6 +361,8 @@ void Game::checkCellCollision() {
     sf::Vector2f newPosition(m_ball.m_position.x + distance.x,
         m_ball.m_position.y + distance.y
     );
+
+    std::cout<<"Position prévue : x = "<<newPosition.x<<", y = "<<newPosition.y<<std::endl;
     
     sf::Vector2f corners[4];
     sf::Vector2f cornersN[4];
@@ -478,16 +440,23 @@ void Game::checkCellCollision() {
                   
         } while (i != intersections.end() && b);
 
+
         //Virtually move the ball to the colliding position and return the new position
         Inter2f sInter = *(std::min_element(intersections.begin(),intersections.end()));
-        newPosition = sf::Vector2f(roundf((corners[0].x+distance.x*sInter.distance)*100000.f)/100000.f,roundf((corners[0].y+distance.y*sInter.distance)*100000.f)/100000.f);
-        //Update the distance travelled and switch it to flat distance
-        distance.x= (distance.x - (distance.x*sInter.distance))/m_ball.m_direction.x;
-        distance.y= (distance.y - (distance.y*sInter.distance))/m_ball.m_direction.y;
+        updateBallPosition(sInter.distance);
+        
+        std::cout<<"Nouvelle position après intersect : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
+        std::cout<<"Distance : x = "<<distance.x<<", "<<distance.y<<std::endl;
+        std::cout<<"Direction : x = "<<m_ball.m_direction.x<<", y = "<<m_ball.m_direction.y<<std::endl;
+        std::cout<<"t = "<<sInter.distance<<std::endl;
+    
 
-        m_ball.m_position = newPosition;
-        m_ball.m_distance = distance;
+        //Update the distance travelled
+        updateBallDistance(sInter.distance);
 
+        if ((m_ball.m_distance.y == 0.f && m_ball.m_distance.x != 0.f) || (m_ball.m_position.x < 0.f || (m_ball.m_position.x + m_ball.m_ballSize.x)  > (float)m_videoMode.width || m_ball.m_position.y < 0.f || (m_ball.m_position.y + m_ball.m_ballSize.y) > (float)m_videoMode.height)) {
+            std::cout<<"passage"<<std::endl;
+        }
 
     }
 
@@ -660,6 +629,18 @@ sf::Vector2i Game::findGridCoord(sf::Vector2f coords) {
     x = (int)(coords.x/m_brickSize.x);
     y = (int)(coords.y/m_brickSize.y);
     return sf::Vector2i(x,y);
+}
+
+//Update remaining m_ball flat distance with given t parameters.  
+void Game::updateBallDistance(float t) {
+    m_ball.m_distance.x= roundf((m_ball.m_distance.x - (m_ball.m_distance.x*t))*1000.f)/1000.f;
+    m_ball.m_distance.y= roundf((m_ball.m_distance.y - (m_ball.m_distance.y*t))*1000.f)/1000.f;
+}
+
+void Game::updateBallPosition(float t) {
+    sf::Vector2f distance = sf::Vector2f(m_ball.m_distance.x*m_ball.m_direction.x,m_ball.m_distance.y*m_ball.m_direction.y);
+    m_ball.m_position.x = roundf((m_ball.m_position.x+distance.x*t)*100.f)/100.f;
+    m_ball.m_position.y = roundf((m_ball.m_position.y+distance.y*t)*100.f)/100.f;
 }
 
 Inter2f Game::findInterBis(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C) {

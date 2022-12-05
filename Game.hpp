@@ -130,7 +130,6 @@ class Game {
         void checkCellCollision(); 
         void destroyBricks();
         bool ballBounce();
-        void checkWallCollision();
         bool checkPlatformCollision();
         void calculatePlatformHit();
         void triggerBallEffect(enum BALL_EFFECT);
@@ -139,6 +138,8 @@ class Game {
 
         //Utility class
         sf::Vector2i findGridCoord(sf::Vector2f coords);
+        void updateBallDistance(float t);
+        void updateBallPosition(float t);
         Inter2f findInter(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C, sf::Vector2f D);
         Inter2f findInterBis(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C);
         float findTinter(float A,float B,float C);

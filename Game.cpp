@@ -15,7 +15,9 @@ Game::Game() {
                 30, //grid_y_size
                 sf::Vector2f(50.f,50.f), //ball_size
                 150, //ball_speed
-                1 //ball_weigth
+                1, //ball_weigth
+                lightweight_hit, //ball_transparency
+                inertia_bounce//ball_inertia
     };
     initVariables();
     initWindow();
@@ -160,9 +162,11 @@ void Game::initVariables() {
     m_ball.setSize(m_settings.ball_size);
     m_ball.m_ballSize = m_settings.ball_size;
     m_ball.m_direction=sf::Vector2f((float)-0.5,-1.f);
-    m_ball.m_ballWeigth=m_settings.ball_weigth;
+    m_ball.m_ballWeight=m_settings.ball_weight;
     m_ball.m_ballSpeed=(float)m_settings.ball_speed;
     m_ball.setPosition((float)m_settings.window_width/2.f+m_ball.m_ballSize.x/2.f,m_platform.getPosition().y-m_ball.m_ballSize.y);
+    m_ball.m_hittingMode = m_settings.ball_hitting_mode;
+    m_ball.m_bouncingMode = m_settings.ball_bouncing_mode;
 }
 
 void Game::initWindow() {
@@ -205,7 +209,8 @@ void Game::moveBall() {
 
     //If there is a move.
     if (abs(distanceFlat.x*m_ball.m_direction.x) > 1.f || abs(distanceFlat.y*m_ball.m_direction.y) > 1.f) {
-    
+        //While the ball has moved and that distance remains we check collision. 
+        //If there is distance to cover left but the ball is not moving, then there is no intersection and we can escape the loop. 
         sf::Vector2f oldPosition(-1.f,-1.f);
         while ((m_ball.m_distance.x > 0.f || m_ball.m_distance.y > 0.f) && m_ball.m_position !=  oldPosition) { //Continue while collision happen
             m_ball.m_bricksHit.clear(); 
@@ -220,30 +225,28 @@ void Game::moveBall() {
                 Check collision on bricks
                 1 : Check brick collision & update brick hit 
                 2 : Destroy bricks
-                3 : Take one remaining brick and change direction from which border was hitted first
+                3 : Take one remaining brick and change direction from which border is intersecting cell
                 4 :  Empty bricksHit 
                 
-                //Then destroy the bricksHit, if at least one remaining change direction according to the edge colliding
-                //We have to change the direction for every colliding edge
             */
             
-            //1 : Check brick collision & update brick hit 
+            //1 : Check cell intersection & update brick hit 
 
             checkCellCollision();
 
 
             // 2 : Destroy every hitted brick
 
-            destroyBricks();
+            if (m_ball.m_hittingMode != lightweight_hit) destroyBricks(); 
 
-            // 3 : If an hitted brick remains. Then we have to change direction
+            // 3 : Change direction from which edge intersected a cell.
 
             if(ballBounce()) {
-                //If a wall or a brick was hit, then we recheck for bounce before checking platform hit
+                //If the ball bounced and changed direction, then we recheck for any other collision/bounce before checking platform hit
                 continue; 
             }
-            // 4 : Empty bricksHit from non-destroyed bricks
-            
+            // 4 : Empty bricksHit
+            m_ball.m_bricksHit.clear(); 
             
 
             /* 
@@ -481,34 +484,26 @@ void Game::destroyBricks() {
     
     //Damage bricks
     for (BrickHit& hit : m_ball.m_bricksHit) {
-        m_grid[hit.y][hit.x].m_strength -= m_ball.m_ballWeigth;
-        if (m_grid[hit.y][hit.x].m_strength <= 0 ) m_grid[hit.y][hit.x].m_ballInside = false; //Trigger brick leave event
+        if (m_ball.m_hittingMode == normal_hit) m_grid[hit.y][hit.x].m_strength -= m_ball.m_ballWeight;
+        else if (m_ball.m_hittingMode == heavy_hit) m_grid[hit.y][hit.x].m_strength = 0;
     }
     
-    //Remove every destroyed brick from bricksHit
-    std::remove_if(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),
-        [&](BrickHit& brick) {
-            return (m_grid[brick.y][brick.x].m_strength <= 0);
-        }
-    
-    );
+    if (m_ball.m_bouncingMode == inertia_bounce) { //If ball has inertia, then the bounce will happen only if a brick has at least 2 strength left
+        //Remove every destroyed brick from bricksHit
+        std::remove_if(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),
+            [&](BrickHit& brick) {
+                return (m_grid[brick.y][brick.x].m_strength <= 0);
+            }
+        
+        );
+    } 
     
 }
 
-//Take one remaining brick and change direction from which border was hitted first
+//Take one remaining brick hit and change direction from which border was hitted first
 //Also change direction if a wall is hit
 bool Game::ballBounce() {
 
-    bool edgeHit[4] = {0}; 
-    
-    //Find the first brick remaining for each edge
-    //(We could priorize one edge if multiple brick)
-    for(auto cell : m_ball.m_bricksHit) {
-        if (m_grid[cell.y][cell.x].m_strength <= 0) { //If cell non empty
-            edgeHit[cell.edge]=true; //Then we have to change direction for this edge.
-            break;
-        } 
-    }
     sf::Vector2f oldDirection = m_ball.m_direction;
 
     //Check wall collision
@@ -523,8 +518,18 @@ bool Game::ballBounce() {
         ) m_ball.m_direction.x = -m_ball.m_direction.x;
 
     //Check brick collision
-    if (edgeHit[0] || edgeHit[2])  m_ball.m_direction.y = -m_ball.m_direction.y; //TOP
-    if (edgeHit[1]|| edgeHit[3] ) m_ball.m_direction.x = -m_ball.m_direction.x; //RIGHT
+    if (m_ball.m_bouncingMode != unstoppable_bounce) {
+        
+        bool edgeHit[4] = {0}; 
+
+        //Find edges that are colliding bricks
+        for(auto hit : m_ball.m_bricksHit) {
+            if (hit.edge != -1) edgeHit[hit.edge]=true; //Then we have to change direction for this edge.
+        }
+
+        if (edgeHit[0] || edgeHit[2])  m_ball.m_direction.y = -m_ball.m_direction.y; //TOP
+        if (edgeHit[1]|| edgeHit[3] ) m_ball.m_direction.x = -m_ball.m_direction.x; //RIGHT
+    }
     //if (edgeHit[2]) m_ball.m_direction.y = -m_ball.m_direction.y; //BOTTOM
     //if (edgeHit[3] ) m_ball.m_direction.x = -m_ball.m_direction.x; //LEFT
     
@@ -578,23 +583,12 @@ void Game::updateBallDistance(float t) {
     m_ball.m_distance.y= roundf((m_ball.m_distance.y - (m_ball.m_distance.y*t))*1000.f)/1000.f;
 }
 
+//Update the ball position using the remaining distance and ball direction. 
+//t parameter is between 0 and 1. It defines the proportion of remaining distance to cover.
 void Game::updateBallPosition(float t) {
     sf::Vector2f distance = sf::Vector2f(m_ball.m_distance.x*m_ball.m_direction.x,m_ball.m_distance.y*m_ball.m_direction.y);
     m_ball.m_position.x = roundf((m_ball.m_position.x+distance.x*t)*100.f)/100.f;
     m_ball.m_position.y = roundf((m_ball.m_position.y+distance.y*t)*100.f)/100.f;
-}
-
-Inter2f Game::findInterBis(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C) {
-    
-    sf::Vector2f v(B-A);
-
-    float tx = (C.x-A.x)/v.x;
-    float ty = (C.y-A.y)/v.y;
-    float t = std::min(tx,ty);
-    Inter2f inter(A.x+t*v.x,A.y+t*v.y);
-    inter.distance=t;
-    
-    return inter;
 }
 
 /*
@@ -612,6 +606,7 @@ float Game::findTinter(float A,float B,float C) {
 /*
 Return an Inter2f object with coordinates of the intersection if it exists.
 Return NULL_INTER constant if it no intersection.
+Not used in the 2nd approach of movement calculation
 */
 Inter2f Game::findInter(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C, sf::Vector2f D) {
     

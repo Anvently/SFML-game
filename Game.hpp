@@ -8,6 +8,17 @@
 #include <vector>
 #include <algorithm>
 
+/*
+unstopabble : will hit brick but never bounce
+heavy : destroy any brick regardless of its strength
+explosive : trigger an explosion at the first hit destroying any brick in its radius
+transparent : ball will ignore bricks
+inertia : ball will inflict damage and bounce only if brick is not destroyed
+*/
+enum BALL_EFFECT{unstoppable_effect, heavy_effect, explosive_effect, transparent_effect, inertia_effect};
+enum HITTING_MODE{normal_hit,heavy_hit,lightweight_hit}; //0 : inflict ball_weigth to brick, 1: destroy brick, 2: don't inflict any damage
+enum BOUNCING_MODE{normal_bounce,inertia_bounce,unstoppable_bounce}; //0: bounce if hit, 1: bounce if brick not destroyed, 2: never bounce
+
 struct GameSettings {
     int window_width;
     int window_height;
@@ -18,10 +29,12 @@ struct GameSettings {
     int grid_y_size;
     sf::Vector2f ball_size;
     int ball_speed; // Interval in milliseconds for the ball to make a distance equivalent to its size.
-    int ball_weigth;
+    int ball_weight;
+    HITTING_MODE ball_hitting_mode;
+    BOUNCING_MODE ball_bouncing_mode;
 };
 
-enum BALL_EFFECT {unstoppable, heavy, explosive};
+
 
 //Utility class to calculate intersection points
 class Inter2f : public sf::Vector2f {
@@ -63,14 +76,18 @@ class Ball : public sf::RectangleShape {
     public:
         using sf::RectangleShape::RectangleShape;
     private: 
-        sf::Vector2f m_direction;
-        sf::Vector2f m_ballSize;
-        int m_ballWeigth;
-        float m_ballSpeed;
+        sf::Vector2f m_direction; //Directionnal X-Y vector of the ball. Between -1.f and 1.f.
+        sf::Vector2f m_ballSize; //X-Y size of the ball
+        int m_ballWeight; //Damage inflicted by the ball when hitting a brick.
+        float m_ballSpeed; //Interval in ms. Time taken by the ball to cover a distance equal to its width (x_distance) and its height (y_distance). 
+        HITTING_MODE m_hittingMode; //0 : inflict ball_weigth to brick, 1: destroy brick, 2: don't inflict any damage
+        BOUNCING_MODE m_bouncingMode; //0: bounce if hit, 1: bounce if brick not destroyed, 2: never bounce
+        //CALCULATION VARIABLE
         sf::Vector2f m_position; //Current position of the ball during movements calculation 
         sf::Vector2f m_distance; //Flat distance remaining to be traveled in a ball move
         std::vector<BrickHit> m_bricksHit; //Vector of BrickHit coordinates of the brick hitted at t time
         bool m_edgeHits[4] = {0};
+        
         friend class Game;
 };
 
@@ -141,7 +158,6 @@ class Game {
         void updateBallDistance(float t);
         void updateBallPosition(float t);
         Inter2f findInter(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C, sf::Vector2f D);
-        Inter2f findInterBis(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C);
         float findTinter(float A,float B,float C);
 }; 
 

@@ -13,7 +13,7 @@ Game::Game() {
                 1500, //tick_interval
                 40, //grid_x_size
                 30, //grid_y_size
-                sf::Vector2f(200.f,100.f), //ball_size
+                sf::Vector2f(50.f,50.f), //ball_size
                 150, //ball_speed
                 1 //ball_weigth
     };

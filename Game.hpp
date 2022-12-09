@@ -25,7 +25,7 @@ struct GameSettings {
     int platform_width;
     int platform_height;
     int tick_interval; //Tick interval in milliseconds
-    int grid_x_size;
+    int grid_x_size; //window_width/grid_size MUST be a whole number on both dimensions
     int grid_y_size;
     sf::Vector2f ball_size;
     int ball_speed; // Interval in milliseconds for the ball to make a distance equivalent to its size.

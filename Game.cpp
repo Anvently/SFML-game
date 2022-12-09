@@ -8,16 +8,16 @@ const Inter2f Inter2f::NULL_INTER = Inter2f(-1.f,-1.f,-1.f);
 Game::Game() {
     m_settings={800, //window_width
                 600, //window_height
-                80, //platform_width
+                100, //platform_width
                 10, //platform_height
                 1500, //tick_interval
                 40, //grid_x_size
                 30, //grid_y_size
-                sf::Vector2f(50.f,50.f), //ball_size
-                150, //ball_speed
+                sf::Vector2f(20.f,30.f), //ball_size
+                50, //ball_speed
                 1, //ball_weigth
-                lightweight_hit, //ball_transparency
-                inertia_bounce//ball_inertia
+                normal_hit, //hit_mode
+                normal_bounce //bounce_mod
     };
     initVariables();
     initWindow();
@@ -213,10 +213,7 @@ void Game::moveBall() {
         //If there is distance to cover left but the ball is not moving, then there is no intersection and we can escape the loop. 
         sf::Vector2f oldPosition(-1.f,-1.f);
         while ((m_ball.m_distance.x > 0.f || m_ball.m_distance.y > 0.f) && m_ball.m_position !=  oldPosition) { //Continue while collision happen
-            m_ball.m_bricksHit.clear(); 
-           // std::cout<<"Ancienne position : x = "<<oldPosition.x<<", y = "<<oldPosition.y<<std::endl;
-            //std::cout<<"Nouvelle position : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
-            //std::cout<<"Distance restante : x = "<<m_ball.m_distance.x<<", y = "<<m_ball.m_distance.y<<std::endl<<std::endl;
+            m_ball.m_bricksHit.clear();           
             oldPosition = m_ball.m_position;
 
             
@@ -226,7 +223,6 @@ void Game::moveBall() {
                 1 : Check brick collision & update brick hit 
                 2 : Destroy bricks
                 3 : Take one remaining brick and change direction from which border is intersecting cell
-                4 :  Empty bricksHit 
                 
             */
             
@@ -245,8 +241,6 @@ void Game::moveBall() {
                 //If the ball bounced and changed direction, then we recheck for any other collision/bounce before checking platform hit
                 continue; 
             }
-            // 4 : Empty bricksHit
-            m_ball.m_bricksHit.clear(); 
             
 
             /* 
@@ -355,7 +349,7 @@ Check collision on cells
 */
 void Game::checkCellCollision() {
     
-    //std::cout<<"Nouvelle position avant check : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
+    std::cout<<"Nouvelle position avant check : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
 
     sf::Vector2f distance(m_ball.m_distance.x*m_ball.m_direction.x,
         m_ball.m_distance.y*m_ball.m_direction.y
@@ -364,7 +358,7 @@ void Game::checkCellCollision() {
         m_ball.m_position.y + distance.y
     );
 
-    //std::cout<<"Position prévue : x = "<<newPosition.x<<", y = "<<newPosition.y<<std::endl;
+    std::cout<<"Position prévue : x = "<<newPosition.x<<", y = "<<newPosition.y<<std::endl;
     
     sf::Vector2f corners[4];
     sf::Vector2f cornersN[4];
@@ -420,10 +414,10 @@ void Game::checkCellCollision() {
         Inter2f sInter = *(std::min_element(intersections.begin(),intersections.end()));
         updateBallPosition(sInter.distance);
         
-        //std::cout<<"Nouvelle position après intersect : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
-        //std::cout<<"Distance : x = "<<distance.x<<", "<<distance.y<<std::endl;
-        //std::cout<<"Direction : x = "<<m_ball.m_direction.x<<", y = "<<m_ball.m_direction.y<<std::endl;
-        //std::cout<<"t = "<<sInter.distance<<std::endl;
+        std::cout<<"Nouvelle position après intersect : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
+        std::cout<<"Distance : x = "<<distance.x<<", "<<distance.y<<std::endl;
+        std::cout<<"Direction : x = "<<m_ball.m_direction.x<<", y = "<<m_ball.m_direction.y<<std::endl;
+        std::cout<<"t = "<<sInter.distance<<std::endl;
     
 
         //Update the distance travelled
@@ -484,7 +478,9 @@ void Game::destroyBricks() {
     
     //Damage bricks
     for (BrickHit& hit : m_ball.m_bricksHit) {
-        if (m_ball.m_hittingMode == normal_hit) m_grid[hit.y][hit.x].m_strength -= m_ball.m_ballWeight;
+        //If the ball is travelling accros the brick without bouncing, we have to prevent multiple hit.
+        if (m_ball.m_bouncingMode == unstoppable_bounce && hit.edge == -1) continue; //If unstoppable do not damage bricks inside the ball
+        if (m_ball.m_hittingMode == normal_hit) m_grid[hit.y][hit.x].m_strength -= m_ball.m_ballWeight; //Bricks at the intersection will be the only ones damaged
         else if (m_ball.m_hittingMode == heavy_hit) m_grid[hit.y][hit.x].m_strength = 0;
     }
     

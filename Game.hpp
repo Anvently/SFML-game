@@ -6,17 +6,19 @@
 #include <random>
 #include <math.h>
 #include <vector>
+#include <string>
 #include <algorithm>
 
 /*
-unstopabble : will hit brick but never bounce
-heavy : destroy any brick regardless of its strength
-explosive : trigger an explosion at the first hit destroying any brick in its radius
-transparent : ball will ignore bricks
-inertia : ball will inflict damage and bounce only if brick is not destroyed
+0 - no effect : disable any effect
+1 - unstopabble : will hit brick but never bounce
+2 - heavy : destroy any brick regardless of its strength
+3 - explosive : trigger an explosion at the first hit destroying any brick in its radius
+4 - transparent : ball will ignore bricks
+5 - inertia : ball will inflict damage and bounce only if brick is not destroyed
 */
-enum BALL_EFFECT{unstoppable_effect, heavy_effect, explosive_effect, transparent_effect, inertia_effect};
-enum HITTING_MODE{normal_hit,heavy_hit,lightweight_hit}; //0 : inflict ball_weigth to brick, 1: destroy brick, 2: don't inflict any damage
+enum BALL_EFFECT{no_effect, unstoppable_effect, heavy_effect, explosive_effect, transparent_effect, inertia_effect};
+enum HITTING_MODE{normal_hit,heavy_hit,lightweight_hit,explosive_hit}; //0 : inflict ball_weigth to brick, 1: destroy brick, 2: don't inflict any damage, 3: explode when colliding a brick
 enum BOUNCING_MODE{normal_bounce,inertia_bounce,unstoppable_bounce}; //0: bounce if hit, 1: bounce if brick not destroyed, 2: never bounce
 
 struct GameSettings {
@@ -87,6 +89,7 @@ class Ball : public sf::RectangleShape {
         sf::Vector2f m_distance; //Flat distance remaining to be traveled in a ball move
         std::vector<BrickHit> m_bricksHit; //Vector of BrickHit coordinates of the brick hitted at t time
         bool m_edgeHits[4] = {0};
+        BALL_EFFECT m_ballEffect; // 0 - no effect : disable any effect, 1 - unstopabble : will hit brick but never bounce, 2 - heavy : destroy any brick regardless of its strength, 3 - explosive : trigger an explosion at the first hit destroying any brick in its radius, 4 - transparent : ball will ignore bricks, 5 - inertia : ball will inflict damage and bounce only if brick is not destroyed
         
         friend class Game;
 };
@@ -142,6 +145,8 @@ class Game {
         std::clock_t m_timerFPS;
         std::clock_t m_timerTick;
         std::clock_t m_timerBall;
+        int m_score;
+        bool m_gameOver;
         void moveBall();
         void tick();
         void checkCellCollision(); 
@@ -149,7 +154,7 @@ class Game {
         bool ballBounce();
         bool checkPlatformCollision();
         void calculatePlatformHit();
-        void triggerBallEffect(enum BALL_EFFECT);
+        void switchBallEffect();
         void changeBallSize(float coeff);
         void increaseBallSpeed();
 

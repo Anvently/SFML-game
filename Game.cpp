@@ -6,15 +6,15 @@ const Inter2f Inter2f::NULL_INTER = Inter2f(-1.f,-1.f,-1.f);
 //CONSTRUCTOR METHODS
 
 Game::Game() {
-    m_settings={800, //window_width
-                600, //window_height
+    m_settings={1200, //window_width
+                800, //window_height
                 100, //platform_width
                 10, //platform_height
                 1500, //tick_interval
-                40, //grid_x_size
-                30, //grid_y_size
-                sf::Vector2f(20.f,30.f), //ball_size
-                50, //ball_speed
+                60, //grid_x_size
+                40, //grid_y_size
+                sf::Vector2f(40.f,40.f), //ball_size
+                100, //ball_speed
                 1, //ball_weigth
                 normal_hit, //hit_mode
                 normal_bounce //bounce_mod
@@ -53,6 +53,9 @@ void Game::pollEvent() {
             if (m_event.key.code == sf::Keyboard::Escape) {
                 m_window->close();
             }
+            else if (m_event.key.code == sf::Keyboard::T) {
+                switchBallEffect();
+            }
             break;
         default:
             break;
@@ -66,23 +69,24 @@ void Game::pollEvent() {
 void Game::update() {
     
     pollEvent();
-
+    
     m_frameCount++;
     if ((std::clock() - m_timerFPS) / CLOCKS_PER_SEC >= 1) { //FPS Counter
         std::cout<<m_frameCount<<" FPS"<<std::endl; 
         m_frameCount=0, m_timerFPS = std::clock();
     }
 
-    movePlatform(sf::Mouse::getPosition(*m_window).x);  
-    moveBall();
+    if (!m_gameOver) {
+        movePlatform(sf::Mouse::getPosition(*m_window).x);  
+        moveBall();
 
-    if ((std::clock() - m_timerTick) >= m_settings.tick_interval) { //Tick counter
-        //TICK INSTRUCTION
-        tick();
+        if ((std::clock() - m_timerTick) >= m_settings.tick_interval) { //Tick counter
+            //TICK INSTRUCTION
+            tick();
 
-        m_timerTick = std::clock();
+            m_timerTick = std::clock();
+        }
     }
-
 
 }
 
@@ -113,8 +117,41 @@ void Game::render() {
             m_window->draw(rect);
         }
     }
+
+    //Draw objects
     m_window->draw(m_platform); //Draw player platform
     m_window->draw(m_ball); //Draw ball
+
+    //Draw texts
+
+    sf::Font arial;
+    arial.loadFromFile("arial.ttf");
+
+    sf::Text score(std::to_string(m_score),arial,30U);
+    score.setPosition(10.f,10.f);
+    score.setFillColor(sf::Color::Red);
+    m_window->draw(score);
+
+    std::string effectText[] = {
+        "0 - no effect",
+        "1 - unstopabble",
+        "2 - heavy",
+        "3 - explosive",
+        "4 - transparent",
+        "5 - inertia"
+    };
+    sf::Text effect(effectText[m_ball.m_ballEffect],arial,30U);
+    effect.setPosition((float)m_videoMode.width-(effect.getGlobalBounds().width+10.f),10.f);
+    effect.setFillColor(sf::Color::Red);
+    m_window->draw(effect);
+
+    if (m_gameOver) {   
+        sf::Text game_over ("GAME OVER",arial, 60U);
+        sf::FloatRect textBounds = game_over.getGlobalBounds();
+        game_over.setPosition(((float)m_videoMode.width-textBounds.width)/2.f,((float)m_videoMode.height-textBounds.height)/2.f);
+        game_over.setFillColor(sf::Color::Red);
+        m_window->draw(game_over);
+    }
     
 
     //DISPLAY
@@ -134,6 +171,8 @@ void Game::initVariables() {
     m_timerTick = std::clock();
     m_timerBall = std::clock();
     m_frameCount = 0;
+    m_score = 0;
+    m_gameOver = false;
 
     //Set window size
     m_videoMode.width = m_settings.window_width;
@@ -167,6 +206,7 @@ void Game::initVariables() {
     m_ball.setPosition((float)m_settings.window_width/2.f+m_ball.m_ballSize.x/2.f,m_platform.getPosition().y-m_ball.m_ballSize.y);
     m_ball.m_hittingMode = m_settings.ball_hitting_mode;
     m_ball.m_bouncingMode = m_settings.ball_bouncing_mode;
+    m_ball.m_ballEffect = no_effect;
 }
 
 void Game::initWindow() {
@@ -184,15 +224,52 @@ void Game::movePlatform(int x) {
     m_platform.setPosition(sf::Vector2f ((float)x,(float)(m_videoMode.height-(int)m_platform.m_platformSize.y)));
 }
 
+//Switch the ball to the next ball effect
+void Game::switchBallEffect() {
+    
+    if (m_ball.m_ballEffect+1>5) m_ball.m_ballEffect = no_effect; //Reset effect if at the end of the effect range
+    else m_ball.m_ballEffect = (BALL_EFFECT)((int)m_ball.m_ballEffect + 1); //Increment ball effect
+
+    switch (m_ball.m_ballEffect) {
+        case no_effect:
+            m_ball.m_bouncingMode = normal_bounce;
+            m_ball.m_hittingMode = normal_hit;
+            break;
+        case unstoppable_effect:
+            m_ball.m_bouncingMode = unstoppable_bounce;
+            m_ball.m_hittingMode = normal_hit;
+            break;
+        case heavy_effect:
+            m_ball.m_bouncingMode = normal_bounce;
+            m_ball.m_hittingMode = heavy_hit;
+            break;
+        case explosive_effect:
+            m_ball.m_bouncingMode = unstoppable_bounce;
+            m_ball.m_hittingMode = explosive_hit;
+            break;
+        case transparent_effect:
+            m_ball.m_bouncingMode = unstoppable_bounce;
+            m_ball.m_hittingMode = lightweight_hit;
+            break;
+        case inertia_effect:
+            m_ball.m_bouncingMode = inertia_bounce;
+            m_ball.m_hittingMode = normal_hit;
+            break;
+    }
+
+
+}
+
 //GAME LOGIC
 
 /*
-1: Calculate the ball position and set a new one. 
-2 : Handle collision on bricks.
-- Check brick collision & update brick hit 
-- Destroy bricks
-- Take one remaining brick and change direction from which border was hitted first
-3 : 
+1: Calculate the next position of the ball. 
+2 : check collision on cells.
+- if collision on cell, move the ball at the colliding position and substract it from the remaining distance
+3 : Check brick collision & destroy bricks + bounce
+4 : check platform hit and make the ball bounce
+5 : if there was a bounce, then we loop again from the start to check for new collision dur to the change of direction
+6 : If no collision remaining, move the ball with the remaining distance 
 */
 void Game::moveBall() {
 
@@ -219,10 +296,10 @@ void Game::moveBall() {
             
 
             /*
-                Check collision on bricks
-                1 : Check brick collision & update brick hit 
+                Check collision on cells
+                1 : Check cells collision & update brick hit 
                 2 : Destroy bricks
-                3 : Take one remaining brick and change direction from which border is intersecting cell
+                3 : Handle bounce on walls or bricks
                 
             */
             
@@ -247,7 +324,7 @@ void Game::moveBall() {
                 Check platform collision 
                 1 : Check if the ball hit the platform on its trajectory
                 2 : Move the ball to the collision coordinate with old direction
-                3 : Calculate new direction and move the ball with the remaining distance 
+                3 : Change direction of the ball using the angle of collision
             */
 
             if (checkPlatformCollision()) {
@@ -261,7 +338,7 @@ void Game::moveBall() {
             
         }
 
-        //If distance remains
+        //If distance remains (and there is no more collision)
         //Move the ball to the new position
         updateBallPosition(1.f);
 
@@ -342,14 +419,13 @@ Check collision on cells
 //For every edge, check if a new cell was hitted along the trajectory
 //Find the first edge(s) to hit some cell. Handle the case where multiple edge are colliding at the exact same time.
 //Store the colliding edge in m_ball parameters
-//Transform newPosition to stop at the hit position. 
+//Transform the new position to stop at the hit position. 
 //Find any non empty cell colliding with the ball
 //Add them to the bricksHit
-//Remove the bricks that are not in bricksHit anymore 
 */
 void Game::checkCellCollision() {
     
-    std::cout<<"Nouvelle position avant check : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
+    //std::cout<<"Nouvelle position avant check : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
 
     sf::Vector2f distance(m_ball.m_distance.x*m_ball.m_direction.x,
         m_ball.m_distance.y*m_ball.m_direction.y
@@ -358,7 +434,7 @@ void Game::checkCellCollision() {
         m_ball.m_position.y + distance.y
     );
 
-    std::cout<<"Position prévue : x = "<<newPosition.x<<", y = "<<newPosition.y<<std::endl;
+    //std::cout<<"Position prévue : x = "<<newPosition.x<<", y = "<<newPosition.y<<std::endl;
     
     sf::Vector2f corners[4];
     sf::Vector2f cornersN[4];
@@ -376,7 +452,7 @@ void Game::checkCellCollision() {
     int goingDown = m_ball.m_direction.y > 0.f;
     int goingRight = m_ball.m_direction.x > 0.f;
     for (int i = 0; i < 4; i++) {
-        if ((goingDown && i == 0) || (!goingDown && i == 2)) continue; //We don't want to check each opposite side...
+        if ((goingDown && i == 0) || (!goingDown && i == 2)) continue; //We don't want to check each opposi<te side...
         if ((goingRight && i == 3) || (!goingRight && i == 1)) continue;  //...only the one consistent with the direction 
         float yCD = goingDown || ((corners[i].y - (float)(findGridCoord(corners[i]).y)*m_brickSize.y) != 0.f) ? //If going up and already at the row, then we look for the previous row
             (float)(findGridCoord(corners[i]).y+goingDown)*m_brickSize.y //yCD = current row
@@ -414,11 +490,12 @@ void Game::checkCellCollision() {
         Inter2f sInter = *(std::min_element(intersections.begin(),intersections.end()));
         updateBallPosition(sInter.distance);
         
+        /*
         std::cout<<"Nouvelle position après intersect : x = "<<m_ball.m_position.x<<", y = "<<m_ball.m_position.y<<std::endl;
         std::cout<<"Distance : x = "<<distance.x<<", "<<distance.y<<std::endl;
         std::cout<<"Direction : x = "<<m_ball.m_direction.x<<", y = "<<m_ball.m_direction.y<<std::endl;
         std::cout<<"t = "<<sInter.distance<<std::endl;
-    
+        */
 
         //Update the distance travelled
         updateBallDistance(sInter.distance);
@@ -473,7 +550,7 @@ void Game::checkCellCollision() {
 
 
 
-//Hit and damage every brick inside bricksHits vector. Remove them in the process.
+//Hit and damage every brick inside bricksHits vector. 
 void Game::destroyBricks() {
     
     //Damage bricks
@@ -482,32 +559,36 @@ void Game::destroyBricks() {
         if (m_ball.m_bouncingMode == unstoppable_bounce && hit.edge == -1) continue; //If unstoppable do not damage bricks inside the ball
         if (m_ball.m_hittingMode == normal_hit) m_grid[hit.y][hit.x].m_strength -= m_ball.m_ballWeight; //Bricks at the intersection will be the only ones damaged
         else if (m_ball.m_hittingMode == heavy_hit) m_grid[hit.y][hit.x].m_strength = 0;
+        m_score++; //Increment player score
     }
     
     if (m_ball.m_bouncingMode == inertia_bounce) { //If ball has inertia, then the bounce will happen only if a brick has at least 2 strength left
         //Remove every destroyed brick from bricksHit
+        
+        m_ball.m_bricksHit.erase(
         std::remove_if(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),
             [&](BrickHit& brick) {
                 return (m_grid[brick.y][brick.x].m_strength <= 0);
             }
         
-        );
+        ),m_ball.m_bricksHit.end());
     } 
     
 }
 
-//Take one remaining brick hit and change direction from which border was hitted first
-//Also change direction if a wall is hit
+//Check the current ball position for any wall bounce. Check for any colliding edge and change direction. 
 bool Game::ballBounce() {
 
     sf::Vector2f oldDirection = m_ball.m_direction;
 
     //Check wall collision
-    if (
-        (m_ball.m_position.y == 0.f && m_ball.m_direction.y < 0.f)  
-        || (m_ball.m_position.y + m_ball.m_ballSize.y == (float) m_videoMode.height && m_ball.m_direction.y > 0)
-        )  m_ball.m_direction.y = -m_ball.m_direction.y;
 
+    if (m_ball.m_position.y == 0.f && m_ball.m_direction.y < 0.f) m_ball.m_direction.y = -m_ball.m_direction.y; //Top wall collision
+    else if (m_ball.m_position.y + m_ball.m_ballSize.y == (float) m_videoMode.height && m_ball.m_direction.y > 0)  {//Bottom wall collision
+        //If no lose : m_ball.m_direction.y = -m_ball.m_direction.y; 
+        //GAMEOVER
+        m_gameOver = true;
+    }
     if (
         (m_ball.m_position.x == 0.f && m_ball.m_direction.x < 0.f)
         || (m_ball.m_position.x + m_ball.m_ballSize.x == (float) m_videoMode.width && m_ball.m_direction.x > 0)

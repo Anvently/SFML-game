@@ -15,9 +15,13 @@ Game::Game() {
                 40, //grid_y_size
                 sf::Vector2f(40.f,40.f), //ball_size
                 100, //ball_speed
-                1, //ball_weigth
+                1, //ball_weight
+                10, //explosion weight
+                200, //explosion_speed
+                200.f, //explosion_radius
                 normal_hit, //hit_mode
-                normal_bounce //bounce_mod
+                normal_bounce, //bounce_mod
+                true //practice_mod
     };
     initVariables();
     initWindow();
@@ -77,7 +81,22 @@ void Game::update() {
     }
 
     if (!m_gameOver) {
+        
         movePlatform(sf::Mouse::getPosition(*m_window).x);  
+
+        for (Explosion &explosion : m_explosions) {
+            explosion.update();
+            checkExplosionHits(explosion);
+            destroyExplosionHits(explosion);
+        }
+
+        if (m_explosions.size()) m_explosions.erase(std::remove_if(m_explosions.begin(),m_explosions.end(),
+            [](Explosion const& explosion) {       
+                return explosion.getRadius() >= explosion.m_explosionRadius;
+            }
+        ),m_explosions.end());
+
+
         moveBall();
 
         if ((std::clock() - m_timerTick) >= m_settings.tick_interval) { //Tick counter
@@ -119,8 +138,13 @@ void Game::render() {
     }
 
     //Draw objects
+
+    for (Explosion const& explosion : m_explosions) {
+        m_window->draw(explosion);
+    }
     m_window->draw(m_platform); //Draw player platform
     m_window->draw(m_ball); //Draw ball
+
 
     //Draw texts
 
@@ -173,6 +197,7 @@ void Game::initVariables() {
     m_frameCount = 0;
     m_score = 0;
     m_gameOver = false;
+    m_explosionWeight = m_settings.explosion_weight;
 
     //Set window size
     m_videoMode.width = m_settings.window_width;
@@ -244,7 +269,7 @@ void Game::switchBallEffect() {
             m_ball.m_hittingMode = heavy_hit;
             break;
         case explosive_effect:
-            m_ball.m_bouncingMode = unstoppable_bounce;
+            m_ball.m_bouncingMode = inertia_bounce;
             m_ball.m_hittingMode = explosive_hit;
             break;
         case transparent_effect:
@@ -559,7 +584,24 @@ void Game::destroyBricks() {
         if (m_ball.m_bouncingMode == unstoppable_bounce && hit.edge == -1) continue; //If unstoppable do not damage bricks inside the ball
         if (m_ball.m_hittingMode == normal_hit) m_grid[hit.y][hit.x].m_strength -= m_ball.m_ballWeight; //Bricks at the intersection will be the only ones damaged
         else if (m_ball.m_hittingMode == heavy_hit) m_grid[hit.y][hit.x].m_strength = 0;
+        else if (m_ball.m_hittingMode == explosive_hit) m_grid[hit.y][hit.x].m_strength -= m_explosionWeight;
         m_score++; //Increment player score
+    }
+
+    if (m_ball.m_hittingMode == explosive_hit && m_ball.m_bricksHit.size()) { //If we need to trigger an explosion
+        Explosion explosion(m_settings.explosion_radius,m_settings.explosion_speed);
+        //We add the bricks colliding the ball in the explosion radius
+        std::for_each(m_ball.m_bricksHit.begin(),m_ball.m_bricksHit.end(),
+            [&explosion](BrickHit brick) {
+                brick.edge=-2; //edge = -2 means that the brick was already hit by the explosion radius 
+                explosion.m_bricksHit.push_back(brick);
+            }
+        );
+        explosion.start();
+        explosion.setPosition(m_ball.getBallCenter());
+        explosion.m_origin = explosion.getPosition();
+        m_explosions.push_back(explosion); //Add the explosion to the list of explosions.
+        switchBallEffect(); //Only one explosion 
     }
     
     if (m_ball.m_bouncingMode == inertia_bounce) { //If ball has inertia, then the bounce will happen only if a brick has at least 2 strength left
@@ -585,9 +627,9 @@ bool Game::ballBounce() {
 
     if (m_ball.m_position.y == 0.f && m_ball.m_direction.y < 0.f) m_ball.m_direction.y = -m_ball.m_direction.y; //Top wall collision
     else if (m_ball.m_position.y + m_ball.m_ballSize.y == (float) m_videoMode.height && m_ball.m_direction.y > 0)  {//Bottom wall collision
-        //If no lose : m_ball.m_direction.y = -m_ball.m_direction.y; 
+        if (m_settings.practice_mode) m_ball.m_direction.y = -m_ball.m_direction.y; 
         //GAMEOVER
-        m_gameOver = true;
+        else m_gameOver = true;
     }
     if (
         (m_ball.m_position.x == 0.f && m_ball.m_direction.x < 0.f)
@@ -620,6 +662,45 @@ void Game::increaseBallSpeed() {
     m_ball.m_ballSpeed=m_ball.m_ballSpeed/1; 
 }
 
+//Add every non empty cell within the current radius of the exlosion in bricksHits
+void Game::checkExplosionHits(Explosion &explosion) {
+    int xmin = findGridCoord(explosion.getPosition()).x;
+    int xmax = findGridCoord(sf::Vector2f(explosion.getPosition().x+explosion.getRadius()*2.f,explosion.getPosition().y)).x;
+    int ymin = findGridCoord(explosion.getPosition()).y;
+    int ymax = findGridCoord(explosion.getPosition()+sf::Vector2f(explosion.getRadius()*2,explosion.getRadius()*2)).y;
+    //Loop every cell contained in the circle square and check if intersect the circle itself
+    for (int x = xmin; x < xmax; x++) {
+        if (x < 0 || x >= m_grid_x_size) continue; //Prevent looking outside grid
+        for (int y = ymin; y < ymax; y++) {
+            if (y < 0 || y >= m_grid_y_size) continue;
+            if (std::find_if(explosion.m_bricksHit.begin(),explosion.m_bricksHit.end(),[&x,&y](BrickHit const& l){return l == BrickHit(x,y);}) != explosion.m_bricksHit.end()) 
+                continue; //If the cell is already in the hits, we skip it
+            if (m_grid[y][x].m_strength<=0) continue;//If cell empty
+            //Check the distance between every of the cell and the origin of the circle
+            sf::Vector2f corners[4];
+            corners[0] = sf::Vector2f(explosion.m_origin-sf::Vector2f((float)x*m_brickSize.x,(float)y*m_brickSize.y));
+            corners[1] = sf::Vector2f(explosion.m_origin-sf::Vector2f((float)(x+1)*m_brickSize.x,(float)y*m_brickSize.y));
+            corners[2] = sf::Vector2f(explosion.m_origin-sf::Vector2f((float)x*m_brickSize.x,(float)(y+1)*m_brickSize.y));
+            corners[3] = sf::Vector2f(explosion.m_origin-sf::Vector2f((float)(x+1)*m_brickSize.x,(float)(y+1)*m_brickSize.y));
+            for (auto const& vCorner : corners) {
+                if (getFlatDistance(vCorner) <= explosion.getRadius()) { //If distance <= radius then the cell is contained within the circle
+                    explosion.m_bricksHit.push_back(BrickHit(x,y,-1));
+                    break; 
+                }
+            }
+        }
+    }
+}
+
+//Hit every brick in Brickhits that have not already been hitted
+void Game::destroyExplosionHits(Explosion &explosion) {
+    for (BrickHit &hit : explosion.m_bricksHit) {
+        if (hit.edge == -2) continue;
+        m_grid[hit.y][hit.x].m_strength -= m_settings.explosion_weight;
+        hit.edge = -2;
+    }
+}
+
 //Make each row fall of 1. Remove the last row and add a new one at the top.  
 void Game::tick() {
 
@@ -644,7 +725,43 @@ void Game::tick() {
 
 }
 
+Explosion::Explosion(float explosionRadius, int speedExplosion) : sf::CircleShape::CircleShape(0.f,30U) {
+    m_explosionRadius = explosionRadius;
+    m_speedExplosion = speedExplosion;
+    this->setFillColor(sf::Color(255,128,0));
+    
+}
+
+//Start explosion. Trigger the clock and set position.
+void Explosion::start() {
+    m_timer = std::clock();
+}
+
+void Explosion::update() {
+    
+    //Update the clock
+    long interval = std::clock() - m_timer;
+    //Expand radius
+    interval = (int)(interval) > m_speedExplosion ? (long)(m_speedExplosion) : (long)(interval);
+    float radius = m_explosionRadius * ((float) interval / (float) m_speedExplosion);
+    this->setRadius(radius);
+    this->setPosition(m_origin.x-radius,m_origin.y-radius);
+    
+    
+
+
+
+}
+
 //UTILITY METHODS
+
+//Return coordinates of the center of the ball.
+sf::Vector2f Ball::getBallCenter() {
+    return sf::Vector2f (
+        m_position.x+(m_ballSize.x/2.f),
+        m_position.y+(m_ballSize.y/2.f)
+    );
+}
 
 //Return grid coordinates of given point in pixels.
 sf::Vector2i Game::findGridCoord(sf::Vector2f coords) {
@@ -705,6 +822,11 @@ Inter2f Game::findInter(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C, sf::Vector
     inter.distance = t;
 
     return inter;
+}
+
+//Return the hypothenuse distance of a x,y vector 
+float Game::getFlatDistance(sf::Vector2f v) {
+    return sqrt(pow(v.x,2.f)+pow(v.y,2.f));   
 }
 
 //ACCESSORS METHODS

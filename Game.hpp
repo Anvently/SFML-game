@@ -32,8 +32,12 @@ struct GameSettings {
     sf::Vector2f ball_size;
     int ball_speed; // Interval in milliseconds for the ball to make a distance equivalent to its size.
     int ball_weight;
+    int explosion_weight; //Damage inflicted to the brick by the explosion
+    int explosion_speed; //Speed of radius expand
+    float explosion_radius; //Radius of the explosion
     HITTING_MODE ball_hitting_mode;
     BOUNCING_MODE ball_bouncing_mode;
+    bool practice_mode;
 };
 
 
@@ -91,6 +95,9 @@ class Ball : public sf::RectangleShape {
         bool m_edgeHits[4] = {0};
         BALL_EFFECT m_ballEffect; // 0 - no effect : disable any effect, 1 - unstopabble : will hit brick but never bounce, 2 - heavy : destroy any brick regardless of its strength, 3 - explosive : trigger an explosion at the first hit destroying any brick in its radius, 4 - transparent : ball will ignore bricks, 5 - inertia : ball will inflict damage and bounce only if brick is not destroyed
         
+        //Util
+        sf::Vector2f getBallCenter(); //Return coordinates of the center of the ball.
+
         friend class Game;
 };
 
@@ -106,6 +113,23 @@ class Brick {
     protected : 
         int m_strength; //Number of remaining hit before the brick is destroyed 
         bool m_ballInside; //Switch to true when the ball enter the brick. Switch to false when the ball leave the brick
+        friend class Game;
+};
+
+class Explosion : public sf::CircleShape {
+    public:
+        using sf::CircleShape::CircleShape;
+        Explosion(float explosionRadius, int speedExplosion);
+    private: 
+        std::clock_t m_timer;
+        float m_explosionRadius;
+        int m_speedExplosion;
+        std::vector<BrickHit> m_bricksHit;
+        sf::Vector2f m_origin;
+
+        void start();
+        void update();
+
         friend class Game;
 };
 
@@ -136,6 +160,7 @@ class Game {
         Platform m_platform; 
         Brick** m_grid; //The grid is designed as m_grid[y][x] 
         Ball m_ball;
+        std::vector<Explosion> m_explosions;
 
         //Player interaction
         void movePlatform(int x);
@@ -147,6 +172,7 @@ class Game {
         std::clock_t m_timerBall;
         int m_score;
         bool m_gameOver;
+        int m_explosionWeight;
         void moveBall();
         void tick();
         void checkCellCollision(); 
@@ -157,6 +183,8 @@ class Game {
         void switchBallEffect();
         void changeBallSize(float coeff);
         void increaseBallSpeed();
+        void checkExplosionHits(Explosion &explosion);
+        void destroyExplosionHits(Explosion &explosion);
 
         //Utility class
         sf::Vector2i findGridCoord(sf::Vector2f coords);
@@ -164,6 +192,7 @@ class Game {
         void updateBallPosition(float t);
         Inter2f findInter(sf::Vector2f A,sf::Vector2f B,sf::Vector2f C, sf::Vector2f D);
         float findTinter(float A,float B,float C);
+        float getFlatDistance(sf::Vector2f v);
 }; 
 
 #endif

@@ -35,9 +35,9 @@ struct GameSettings {
     int explosion_weight; //Damage inflicted to the brick by the explosion
     int explosion_speed; //Speed of radius expand
     float explosion_radius; //Radius of the explosion
-    HITTING_MODE ball_hitting_mode;
-    BOUNCING_MODE ball_bouncing_mode;
-    bool practice_mode;
+    HITTING_MODE ball_hitting_mode; //See enum declaration
+    BOUNCING_MODE ball_bouncing_mode; //See enum declaration
+    bool practice_mode; //Disable game_over if true, the ball will bounce on the bottom edge of the screen
 };
 
 

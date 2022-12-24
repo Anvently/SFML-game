@@ -6,22 +6,22 @@ const Inter2f Inter2f::NULL_INTER = Inter2f(-1.f,-1.f,-1.f);
 //CONSTRUCTOR METHODS
 
 Game::Game() {
-    m_settings={1200, //window_width
-                800, //window_height
+    m_settings={800, //window_width
+                600, //window_height
                 100, //platform_width
                 10, //platform_height
                 1500, //tick_interval
-                60, //grid_x_size
-                40, //grid_y_size
-                sf::Vector2f(40.f,40.f), //ball_size
-                100, //ball_speed
+                40, //grid_x_size
+                30, //grid_y_size
+                sf::Vector2f(20.f,20.f), //ball_size
+                75, //ball_speed
                 1, //ball_weight
                 10, //explosion weight
                 200, //explosion_speed
                 200.f, //explosion_radius
                 normal_hit, //hit_mode
                 normal_bounce, //bounce_mod
-                true //practice_mod
+                false //practice_mod
     };
     initVariables();
     initWindow();
@@ -29,8 +29,9 @@ Game::Game() {
 }
 
 Game::Game(GameSettings settings) {
-    Game();
     m_settings = settings;
+    initVariables();
+    initWindow();
 }
 
 Game::~Game() {
